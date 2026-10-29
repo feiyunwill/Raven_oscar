@@ -24,8 +24,32 @@ rvn_vk_config_t g_vk_config;
 
 int rvn_vk_failed(VkResult result, const char* what) {
 	if (result >= 0) return R_FALSE;
+	/* once the device is lost every call fails: that was reported once */
+	if (g_vk.device_lost) return R_TRUE;
+	if (result == VK_ERROR_DEVICE_LOST) {
+		rvn_error(R_ERROR_BACKEND, R_SEVERITY_WARNING, "Vulkan: %s: the device was lost (driver reset, GPU removed)", what);
+		rvn_vk_device_lost();
+		return R_TRUE;
+	}
 	rvn_error(R_ERROR_BACKEND, R_SEVERITY_ERROR, "Vulkan: %s failed (%s)", what, rvn_vk_result_name(result));
 	return R_TRUE;
+}
+
+void rvn_vk_device_lost(void) {
+	if (g_vk.device_lost || !g_vk.initialized) return;
+	g_vk.device_lost = R_TRUE;
+	if (g_vk.external) {
+		/* the device belongs to the application: Raven cannot make another one */
+		rvn_error(R_ERROR_BACKEND, R_SEVERITY_FATAL,
+			"Vulkan: the device of the application was lost: Raven stops drawing (Rshutdown, then Rinit with a new device)");
+		return;
+	}
+	/* the UI thread starts the backend again at its next update */
+	Rbackend_device_lost();
+}
+
+int rvn_vk_usable(void) {
+	return g_vk.initialized && !g_vk.device_lost;
 }
 
 void rvn_vk_queue_lock(void) {

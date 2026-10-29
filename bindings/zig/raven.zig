@@ -870,6 +870,21 @@ pub const RActionCallback = ?*const fn (sender: Rid, action: ?[*:0]const u8, use
 /// thread that raised the error: errors of the renderer (and the messages
 /// of the Vulkan validation layers) come from the render thread.
 pub const RErrorCallback = ?*const fn (code: RError, severity: RSeverity, detail: ?[*:0]const u8) callconv(.C) void;
+/// Registers a function called after Raven recovered from the loss
+/// of the GPU device (a driver reset or update, a GPU removed, a long sleep).
+///
+/// Raven then starts the backend again and remakes what it can by itself:
+/// the surfaces of the windows, the fonts, the shaders, the textures made
+/// from image files and the small textures (up to 256 x 256). The pixels of
+/// the larger textures made from pixels are lost: the textures keep their
+/// handle and size but are transparent until Rtexture_update fills them
+/// again, which is what this function is for. Textures that wrap objects of
+/// the backend (raven_vulkan.h) must be made again, and the Vulkan handles
+/// returned by Rvulkan_get_device... have changed.
+///
+/// Called on the UI thread, during Rdraw_frame / Rwait_frame. Set it after
+/// Rinit; NULL removes it.
+pub const RDeviceResetCallback = ?*const fn (user_data: ?*anyopaque) callconv(.C) void;
 /// Called for a drop target (a widget, or a window: `target` is its
 /// handle). Return R_TRUE to accept: while the pointer is over the target this
 /// shows the "can drop here" cursor and highlights the target; for
@@ -1475,6 +1490,7 @@ pub extern fn Rerror_get_last(detail: ?*?[*:0]const u8, severity: ?*RSeverity) R
 pub extern fn Rerror_to_string(error_: RError) ?[*:0]const u8;
 pub extern fn Rseverity_to_string(severity: RSeverity) ?[*:0]const u8;
 pub extern fn Rerror_set_callback(callback: RErrorCallback) void;
+pub extern fn Rset_device_reset_callback(callback: RDeviceResetCallback, user_data: ?*anyopaque) void;
 pub extern fn Rwindow_get_frame_stats(window: Rid, stats: ?*RFrameStats) void;
 /// Opens a top-level window.
 /// width,height Client size in logical units.

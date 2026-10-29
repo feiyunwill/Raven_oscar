@@ -74,6 +74,8 @@ void rvn_text_draw(rvn_drawlist_t* list, rvn_font_t* font, float size_px, float 
 
 /** Creates and updates the GPU textures of the atlas pages changed since the last call. UI thread. */
 void rvn_fonts_flush(void);
+/** After the loss of the device (the atlas textures are back, transparent): uploads every page again. */
+void rvn_fonts_device_reset(void);
 
 /** Replaces the atlas pseudo-handles of a finished draw list by real texture handles. UI thread. */
 void rvn_fonts_resolve_pages(rvn_drawlist_t* list);

@@ -769,6 +769,121 @@ static void test_vulkan_api(void) {
  * ------------------------------------------------------------------------- */
 
 /* Starts the Vulkan backend and checks that a window can really be rendered. */
+/* ---------------------------------------------------------------------------
+ *  Loss of the device
+ * ------------------------------------------------------------------------- */
+
+static int g_resets;
+static Rid g_big_texture;
+static uint8_t* g_big_pixels;
+
+static void on_device_reset(void* user_data) {
+	(void)user_data;
+	g_resets++;
+	/* the pixels only the application has: given again */
+	Rtexture_update(g_big_texture, g_big_pixels, 300, 300);
+}
+
+static int lit_pixels(float x0, float y0, float w, float h) {
+	int lit = 0;
+	float x, y;
+	for (y = y0; y < y0 + h; y += 1.0f) {
+		for (x = x0; x < x0 + w; x += 1.0f) {
+			if (pixel_at(x, y)[0] > 128) lit++;
+		}
+	}
+	return lit;
+}
+
+static void test_device_lost(void) {
+	static const uint8_t small[16] = {
+		255, 0, 0, 255,   255, 0, 0, 255,
+		255, 0, 0, 255,   255, 0, 0, 255
+	};
+	Rid window = window_from(
+		"<Window Width=\"400\" Height=\"200\" ClearColor=\"#000000\">"
+		"  <Canvas>"
+		"    <Image Name=\"small\" Slot.Position=\"10,10\" Slot.Size=\"40,40\"/>"
+		"    <Image Name=\"big\" Slot.Position=\"60,10\" Slot.Size=\"40,40\"/>"
+		"    <Label Name=\"label\" Slot.Position=\"120,10\" TextSize=\"40\" Color=\"#FFFFFF\">Raven</Label>"
+		"    <Border Name=\"effect\" Slot.Position=\"10,120\" Slot.Size=\"60,60\" Effect=\"plasma\"/>"
+		"  </Canvas>"
+		"</Window>");
+	Rid small_texture = Rtexture_create_from_pixels(small, 2, 2);
+	void* device_before = Rvulkan_get_device();
+	int i, lit_before, lit_after;
+	const uint8_t* p;
+
+	g_big_pixels = (uint8_t*)malloc(300 * 300 * 4);
+	for (i = 0; i < 300 * 300; i++) {
+		g_big_pixels[i * 4 + 0] = 0;
+		g_big_pixels[i * 4 + 1] = 255;
+		g_big_pixels[i * 4 + 2] = 0;
+		g_big_pixels[i * 4 + 3] = 255;
+	}
+	g_big_texture = Rtexture_create_from_pixels(g_big_pixels, 300, 300);
+	Rimage_set_texture(Rwidget_find(window, "small"), small_texture);
+	Rimage_set_texture(Rwidget_find(window, "big"), g_big_texture);
+	Rimage_set_stretch(Rwidget_find(window, "small"), R_STRETCH_FILL);
+	Rimage_set_stretch(Rwidget_find(window, "big"), R_STRETCH_FILL);
+	capture(window);
+	CHECK_PIXEL(30, 30, 255, 0, 0);
+	CHECK_PIXEL(80, 30, 0, 255, 0);
+	lit_before = lit_pixels(120.0f, 10.0f, 200.0f, 60.0f);
+	CHECK(lit_before > 300);
+	p = pixel_at(40, 150);
+	CHECK(p[0] + p[1] + p[2] > 60);
+
+	/* lost: Raven makes a new device at the next frame, and everything again */
+	g_resets = 0;
+	Rset_device_reset_callback(on_device_reset, NULL);
+	EXPECT_ERRORS_BEGIN();
+	Rvulkan_simulate_device_lost();
+	Rdraw_frame();
+	EXPECT_ERRORS_END(1);
+	CHECK(g_resets == 1);
+	CHECK(Rvulkan_get_device() != NULL);
+	if (Rvulkan_get_device() == device_before) printf("  (the driver gave the same VkDevice handle again)\n");
+
+	capture(window);
+	/* a small texture: from the copy of its pixels */
+	CHECK_PIXEL(30, 30, 255, 0, 0);
+	/* a large one: given again by the application in the callback */
+	CHECK_PIXEL(80, 30, 0, 255, 0);
+	/* the glyphs: from the copy the fonts keep */
+	lit_after = lit_pixels(120.0f, 10.0f, 200.0f, 60.0f);
+	CHECK(lit_after == lit_before);
+	/* the shader of the effect */
+	p = pixel_at(40, 150);
+	CHECK(p[0] + p[1] + p[2] > 60);
+
+	/* without the callback, the large texture comes back transparent */
+	Rset_device_reset_callback(NULL, NULL);
+	EXPECT_ERRORS_BEGIN();
+	Rvulkan_simulate_device_lost();
+	Rdraw_frame();
+	EXPECT_ERRORS_END(1);
+	capture(window);
+	CHECK_PIXEL(30, 30, 255, 0, 0);
+	CHECK_PIXEL(80, 30, 0, 0, 0);
+	/* and works as before when it is filled again */
+	Rtexture_update(g_big_texture, g_big_pixels, 300, 300);
+	capture(window);
+	CHECK_PIXEL(80, 30, 0, 255, 0);
+
+	/* a window opened after the recovery */
+	Rwindow_destroy(window);
+	window = window_from("<Window Width=\"100\" Height=\"100\" ClearColor=\"#0000FF\"/>");
+	capture(window);
+	CHECK_PIXEL(50, 50, 0, 0, 255);
+	Rwindow_destroy(window);
+
+	Rtexture_destroy(small_texture);
+	Rtexture_destroy(g_big_texture);
+	free(g_big_pixels);
+	g_big_pixels = NULL;
+}
+
 static int start(int headless) {
 	RInitDesc desc;
 	Rid probe;
@@ -825,6 +940,11 @@ int main(void) {
 	RUN(test_viewport);
 	RUN(test_windows);
 	RUN(test_vulkan_api);
+	RUN(test_device_lost);
+	/* everything works on the new device */
+	RUN(test_shapes);
+	RUN(test_text);
+	RUN(test_glass);
 
 	Rpixels_free(g_pixels);
 	Rshutdown();

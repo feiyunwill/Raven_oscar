@@ -467,6 +467,8 @@ static rvn_vk_shader_t* rvn_vk_shader_find(Rid id) {
 int rvn_vk_shader_create(Rid id, const uint32_t* spirv, size_t size) {
 	uint32_t index = R_ID_INDEX(id);
 	rvn_vk_shader_t* shader;
+	/* the device is lost: Raven gives every shader again once the backend is started again */
+	if (!rvn_vk_usable()) return R_TRUE;
 	if (index >= g_vk.shader_cap) {
 		uint32_t cap = g_vk.shader_cap ? g_vk.shader_cap : 16;
 		while (cap <= index) cap *= 2;
@@ -484,7 +486,7 @@ int rvn_vk_shader_create(Rid id, const uint32_t* spirv, size_t size) {
 }
 
 void rvn_vk_shader_destroy(Rid id) {
-	rvn_vk_shader_t* shader = rvn_vk_shader_find(id);
+	rvn_vk_shader_t* shader = g_vk.initialized ? rvn_vk_shader_find(id) : NULL;
 	uint32_t i;
 	if (!shader) return;
 	/* (frames on the GPU may still draw with it) */

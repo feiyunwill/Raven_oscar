@@ -1717,6 +1717,30 @@ void rvn_window_add_shortcut(rvn_window_t* window, RKey key, uint32_t modifiers,
 }
 
 /* ---------------------------------------------------------------------------
+ *  Loss of the device
+ * ------------------------------------------------------------------------- */
+
+void rvn_windows_device_reset(void) {
+	uint32_t i;
+	for (i = 0; i < g_rvn.windows.used; i++) {
+		rvn_window_t* window = (rvn_window_t*)rvn_pool_at(&g_rvn.windows, i);
+		RNativeWindow native;
+		if (!window || !window->platform || !window->surface_ready) continue;
+		/* the backend was started again: the surface of the window is to be made again, as at its creation */
+		memset(&native, 0, sizeof(native));
+		g_rvn.platform->window_get_native(window->platform, &native);
+		if (!rvn_renderer_create_surface(window->id, &native, (uint32_t)rvn_maxi(window->width_px, 1),
+			(uint32_t)rvn_maxi(window->height_px, 1))) {
+			rvn_error(R_ERROR_BACKEND, R_SEVERITY_ERROR, "after the loss of the device: cannot make the surface of a window again");
+			window->surface_ready = R_FALSE;
+			continue;
+		}
+		window->needs_layout = R_TRUE;
+		window->needs_paint = R_TRUE;
+	}
+}
+
+/* ---------------------------------------------------------------------------
  *  Destruction
  * ------------------------------------------------------------------------- */
 

@@ -175,6 +175,11 @@ typedef struct rvn_vk_shader_t {
 typedef struct rvn_vk_state_t {
 	int initialized;
 	RBackendInitInfo info;
+	/**
+	 * A call answered VK_ERROR_DEVICE_LOST: nothing is sent to the GPU any
+	 * more until Raven starts the backend again (render/device.c).
+	 */
+	int device_lost;
 
 	VkInstance instance;
 	VkPhysicalDevice physical_device;
@@ -241,6 +246,10 @@ extern rvn_vk_state_t g_vk;
 
 /** Reports a failed Vulkan call and evaluates to R_TRUE when `result` is an error. */
 int rvn_vk_failed(VkResult result, const char* what);
+/** The device is lost (a call answered VK_ERROR_DEVICE_LOST, or Rvulkan_simulate_device_lost). */
+void rvn_vk_device_lost(void);
+/** R_FALSE while nothing may be sent to the GPU: not started, or the device is lost. */
+int rvn_vk_usable(void);
 
 /* ---------------------------------------------------------------------------
  *  vk_device.c

@@ -485,6 +485,25 @@ extern "C" {
 	typedef void (*RErrorCallback)(RError code, RSeverity severity, const char* detail);
 	RAVEN_API void Rerror_set_callback(RErrorCallback callback);
 
+	/**
+	 * @brief Registers a function called after Raven recovered from the loss
+	 * of the GPU device (a driver reset or update, a GPU removed, a long sleep).
+	 *
+	 * Raven then starts the backend again and remakes what it can by itself:
+	 * the surfaces of the windows, the fonts, the shaders, the textures made
+	 * from image files and the small textures (up to 256 x 256). The pixels of
+	 * the larger textures made from pixels are lost: the textures keep their
+	 * handle and size but are transparent until Rtexture_update fills them
+	 * again, which is what this function is for. Textures that wrap objects of
+	 * the backend (raven_vulkan.h) must be made again, and the Vulkan handles
+	 * returned by Rvulkan_get_device... have changed.
+	 *
+	 * Called on the UI thread, during Rdraw_frame / Rwait_frame. Set it after
+	 * Rinit; NULL removes it.
+	 */
+	typedef void (*RDeviceResetCallback)(void* user_data);
+	RAVEN_API void Rset_device_reset_callback(RDeviceResetCallback callback, void* user_data);
+
 
 	/* ============================================================================
 	 *  DIAGNOSTICS

@@ -33,6 +33,7 @@ void rvn_vk_uploads_flush(void) {
 	if (!g_vk.upload_open) return;
 	g_vk.upload_open = R_FALSE;
 	g_vk.staging_used = 0;
+	if (g_vk.device_lost) return;
 	if (rvn_vk_failed(rvn_vk.EndCommandBuffer(g_vk.upload_commands), "vkEndCommandBuffer")) return;
 
 	memset(&submit, 0, sizeof(submit));
@@ -45,7 +46,7 @@ void rvn_vk_uploads_flush(void) {
 	if (rvn_vk_failed(result, "vkQueueSubmit")) return;
 
 	/* the staging buffer is reused right away, so the copies must be finished */
-	rvn_vk.WaitForFences(g_vk.device, 1, &g_vk.upload_fence, VK_TRUE, UINT64_MAX);
+	if (rvn_vk_failed(rvn_vk.WaitForFences(g_vk.device, 1, &g_vk.upload_fence, VK_TRUE, UINT64_MAX), "vkWaitForFences")) return;
 	rvn_vk.ResetFences(g_vk.device, 1, &g_vk.upload_fence);
 }
 
@@ -356,7 +357,10 @@ static void rvn_vk_texture_quiesce(void) {
 }
 
 int rvn_vk_texture_create(Rid id, const RTextureDesc* desc, const void* pixels) {
-	rvn_vk_texture_t* texture = rvn_vk_texture_slot(id);
+	rvn_vk_texture_t* texture;
+	/* the device is lost: Raven makes every texture again once the backend is started again */
+	if (!rvn_vk_usable()) return R_TRUE;
+	texture = rvn_vk_texture_slot(id);
 	if (texture->used) {
 		rvn_vk_texture_quiesce();
 		rvn_vk_texture_release(texture);
@@ -367,7 +371,7 @@ int rvn_vk_texture_create(Rid id, const RTextureDesc* desc, const void* pixels) 
 }
 
 void rvn_vk_texture_update(Rid id, Ruint x, Ruint y, Ruint width, Ruint height, const void* pixels) {
-	rvn_vk_texture_t* texture = rvn_vk_texture_find(id);
+	rvn_vk_texture_t* texture = rvn_vk_usable() ? rvn_vk_texture_find(id) : NULL;
 	if (!texture || texture->wrapped || !pixels) return;
 	rvn_vk_texture_write(texture, x, y, width, height, pixels);
 }
@@ -412,7 +416,7 @@ static void rvn_vk_texture_add_mipmaps(rvn_vk_texture_t* texture) {
 }
 
 void rvn_vk_texture_set_filter(Rid id, RFilterType filter) {
-	rvn_vk_texture_t* texture = rvn_vk_texture_find(id);
+	rvn_vk_texture_t* texture = rvn_vk_usable() ? rvn_vk_texture_find(id) : NULL;
 	if (!texture || texture->filter == filter) return;
 	if (texture->levels <= 1 && !texture->wrapped &&
 		rvn_vk_wants_mipmaps(texture->width, texture->height, texture->format, filter, texture->shared)) {
@@ -427,7 +431,7 @@ void rvn_vk_texture_set_filter(Rid id, RFilterType filter) {
 }
 
 void rvn_vk_texture_destroy(Rid id) {
-	rvn_vk_texture_t* texture = rvn_vk_texture_find(id);
+	rvn_vk_texture_t* texture = g_vk.initialized ? rvn_vk_texture_find(id) : NULL;
 	if (!texture) return;
 	rvn_vk_texture_quiesce();
 	rvn_vk_texture_release(texture);

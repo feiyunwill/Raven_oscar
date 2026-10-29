@@ -613,6 +613,40 @@ static void test_timers_theme_and_attributes(void) {
 	CHECK(!Rwidget_set_attribute(label, "Opacity", "not a number"));
 }
 
+/* A backend that reports the loss of its device: Raven starts it again and remakes what it had. */
+static int g_device_resets;
+static void on_device_reset(void* user_data) {
+	(void)user_data;
+	g_device_resets++;
+}
+
+static void test_device_lost(void) {
+	static const uint8_t pixels[16] = { 255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255 };
+	Rid texture = Rtexture_create_from_pixels(pixels, 2, 2);
+	int width = 0, height = 0;
+	Rset_device_reset_callback(on_device_reset, NULL);
+	g_device_resets = 0;
+	/* nothing lost: nothing happens */
+	Rdraw_frame();
+	CHECK(g_device_resets == 0);
+
+	EXPECT_ERRORS_BEGIN();
+	Rbackend_device_lost();
+	Rbackend_device_lost();             /* (reported twice: recovered once) */
+	Rdraw_frame();
+	EXPECT_ERRORS_END(1);
+	CHECK(g_device_resets == 1);
+	/* the handles stay valid */
+	CHECK(Rtexture_is_valid(texture));
+	Rtexture_get_size(texture, &width, &height);
+	CHECK(width == 2 && height == 2);
+	CHECK(Rwindow_is_valid(g_window));
+	Rdraw_frame();
+	CHECK(g_device_resets == 1);
+	Rset_device_reset_callback(NULL, NULL);
+	Rtexture_destroy(texture);
+}
+
 int main(void) {
 	if (!test_init(0)) {
 		printf("cannot initialize Raven\n");
@@ -630,6 +664,7 @@ int main(void) {
 	RUN(test_tabs_and_expander);
 	RUN(test_deletion_and_events);
 	RUN(test_timers_theme_and_attributes);
+	RUN(test_device_lost);
 
 	/* everything still paints */
 	Rdraw_frame();

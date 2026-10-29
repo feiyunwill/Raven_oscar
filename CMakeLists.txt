@@ -150,6 +150,7 @@ set(RAVEN_RENDER_SOURCES
 	src/render/renderer.h
 	src/render/texture.c
 	src/render/shader.c
+	src/render/device.c
 	src/render/null/null_backend.c
 	src/resources/default_font.c
 	src/resources/mono_font.c

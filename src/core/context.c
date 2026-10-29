@@ -154,7 +154,9 @@ int Rinit_ex(const RInitDesc* user_desc) {
 
 	/* rendering */
 	memset(&info, 0, sizeof(info));
-	info.app_name = desc.app_name ? desc.app_name : "Raven application";
+	g_rvn.app_name = rvn_strdup(desc.app_name ? desc.app_name : "Raven application");
+	g_rvn.enable_validation = desc.enable_validation;
+	info.app_name = g_rvn.app_name;
 	info.enable_validation = desc.enable_validation;
 	info.vsync = g_rvn.vsync;
 	info.window_system = g_rvn.platform->system;
@@ -175,6 +177,8 @@ int Rinit_ex(const RInitDesc* user_desc) {
 	return R_TRUE;
 
 fail_renderer:
+	rvn_free(g_rvn.app_name);
+	g_rvn.app_name = NULL;
 	rvn_jobs_shutdown();
 	g_rvn.platform->shutdown();
 fail_platform:
@@ -242,6 +246,7 @@ void Rshutdown(void) {
 	rvn_free(g_rvn.dead_windows);
 	rvn_free(g_rvn.clipboard);
 	rvn_free(g_rvn.xml_base_path);
+	rvn_free(g_rvn.app_name);
 	rvn_mutex_destroy(&g_rvn.task_mutex);
 	rvn_pool_free(&g_rvn.windows);
 	rvn_pool_free(&g_rvn.widgets);
@@ -538,6 +543,12 @@ int Ris_running(void) {
 	return R_FALSE;
 }
 
+void Rset_device_reset_callback(RDeviceResetCallback callback, void* user_data) {
+	RVN_API_GUARD_VOID();
+	g_rvn.device_reset_callback = callback;
+	g_rvn.device_reset_user = user_data;
+}
+
 void Rset_frame_callback(RFrameCallback callback, void* user_data) {
 	RVN_API_GUARD_VOID();
 	g_rvn.frame_callback = callback;
@@ -580,6 +591,8 @@ void rvn_update(void) {
 
 	rvn_tasks_run();
 	rvn_timers_run();
+	/* the GPU device was lost: everything of the backend is made again first */
+	rvn_device_check();
 
 	now = rvn_clock_seconds();
 	g_rvn.delta_time = now - g_rvn.last_update_time;

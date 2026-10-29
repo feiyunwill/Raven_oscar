@@ -127,6 +127,16 @@ typedef struct rvn_context_t {
 	RFrameCallback frame_callback;
 	void* frame_user;
 
+	/* loss of the device (render/device.c) */
+	RDeviceResetCallback device_reset_callback;
+	void* device_reset_user;
+	/** What Rinit gave the backend: it is started again with the same. */
+	char* app_name;
+	int enable_validation;
+	/** When to try again after a recovery that failed (rvn_clock_seconds). */
+	double device_retry_time;
+	int device_retry_reported;
+
 	/* tasks posted from other threads */
 	rvn_mutex_t task_mutex;
 	rvn_task_t* tasks;
@@ -218,6 +228,8 @@ void rvn_wake(void);
  * (theme, font or texture size change). Implemented in widget/window.c.
  */
 void rvn_invalidate_all_windows(void);
+/** After the loss of the device: makes the surface of every window again (widget/window.c). */
+void rvn_windows_device_reset(void);
 /** The theme changed from dark to light or back: the windows that are seen through tell the window system. */
 void rvn_windows_theme_changed(void);
 /** Marks every window for a new paint, keeping the layout. Implemented in widget/window.c. */

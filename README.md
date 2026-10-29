@@ -567,6 +567,14 @@ static void on_error(RError code, RSeverity severity, const char* detail) {
 Rerror_set_callback(on_error);
 ```
 
+**Loss of the GPU.** When the device is lost (a driver reset or update, a
+GPU removed), Raven starts the backend again at the next frame and remakes
+the surfaces, the fonts, the shaders, the textures made from image files and
+the small textures. Larger textures made from pixels come back transparent:
+fill them again in the function given to `Rset_device_reset_callback`.
+`Rvulkan_simulate_device_lost` tests this path; a custom backend reports a
+loss with `Rbackend_device_lost`.
+
 ### The loop
 
 Raven has no loop of its own. The application asks for one frame at a time:
@@ -1143,7 +1151,6 @@ What Raven does not do yet, by area. Contributions are welcome.
 **Rendering**
 - A GPU memory sub-allocator.
 - Presenting several windows in one call.
-- Recovery from a lost Vulkan device.
 
 **Widgets**
 - Node graph: knots on links, groups and comments, a minimap, undo (for now the

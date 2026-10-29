@@ -1934,6 +1934,25 @@ namespace Raven
     public delegate void RErrorCallback(RError code, RSeverity severity, IntPtr detail);
 
     /// <summary>
+    /// Registers a function called after Raven recovered from the loss
+    /// of the GPU device (a driver reset or update, a GPU removed, a long sleep).
+    /// 
+    /// Raven then starts the backend again and remakes what it can by itself:
+    /// the surfaces of the windows, the fonts, the shaders, the textures made
+    /// from image files and the small textures (up to 256 x 256). The pixels of
+    /// the larger textures made from pixels are lost: the textures keep their
+    /// handle and size but are transparent until Rtexture_update fills them
+    /// again, which is what this function is for. Textures that wrap objects of
+    /// the backend (raven_vulkan.h) must be made again, and the Vulkan handles
+    /// returned by Rvulkan_get_device... have changed.
+    /// 
+    /// Called on the UI thread, during Rdraw_frame / Rwait_frame. Set it after
+    /// Rinit; NULL removes it.
+    /// </summary>
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate void RDeviceResetCallback(IntPtr user_data);
+
+    /// <summary>
     /// Called for a drop target (a widget, or a window: `target` is its
     /// handle). Return R_TRUE to accept: while the pointer is over the target this
     /// shows the "can drop here" cursor and highlights the target; for
@@ -2630,6 +2649,9 @@ namespace Raven
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         public static extern void Rerror_set_callback(RErrorCallback callback);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void Rset_device_reset_callback(RDeviceResetCallback callback, IntPtr user_data);
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         public static extern void Rwindow_get_frame_stats(uint window, ref RFrameStats stats);

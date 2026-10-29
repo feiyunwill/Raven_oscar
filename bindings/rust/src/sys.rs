@@ -851,6 +851,21 @@ pub type RActionCallback = Option<unsafe extern "C" fn(sender: Rid, action: *con
 /// thread that raised the error: errors of the renderer (and the messages
 /// of the Vulkan validation layers) come from the render thread.
 pub type RErrorCallback = Option<unsafe extern "C" fn(code: RError, severity: RSeverity, detail: *const c_char)>;
+/// Registers a function called after Raven recovered from the loss
+/// of the GPU device (a driver reset or update, a GPU removed, a long sleep).
+///
+/// Raven then starts the backend again and remakes what it can by itself:
+/// the surfaces of the windows, the fonts, the shaders, the textures made
+/// from image files and the small textures (up to 256 x 256). The pixels of
+/// the larger textures made from pixels are lost: the textures keep their
+/// handle and size but are transparent until Rtexture_update fills them
+/// again, which is what this function is for. Textures that wrap objects of
+/// the backend (raven_vulkan.h) must be made again, and the Vulkan handles
+/// returned by Rvulkan_get_device... have changed.
+///
+/// Called on the UI thread, during Rdraw_frame / Rwait_frame. Set it after
+/// Rinit; NULL removes it.
+pub type RDeviceResetCallback = Option<unsafe extern "C" fn(user_data: *mut c_void)>;
 /// Called for a drop target (a widget, or a window: `target` is its
 /// handle). Return R_TRUE to accept: while the pointer is over the target this
 /// shows the "can drop here" cursor and highlights the target; for
@@ -1495,6 +1510,7 @@ extern "C" {
     pub fn Rerror_to_string(error: RError) -> *const c_char;
     pub fn Rseverity_to_string(severity: RSeverity) -> *const c_char;
     pub fn Rerror_set_callback(callback: RErrorCallback);
+    pub fn Rset_device_reset_callback(callback: RDeviceResetCallback, user_data: *mut c_void);
     pub fn Rwindow_get_frame_stats(window: Rid, stats: *mut RFrameStats);
     /// Opens a top-level window.
     /// width,height Client size in logical units.

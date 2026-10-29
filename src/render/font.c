@@ -806,6 +806,22 @@ void rvn_text_draw(rvn_drawlist_t* list, rvn_font_t* font, float size_px, float 
  *  Atlas upload (UI thread)
  * ------------------------------------------------------------------------- */
 
+void rvn_fonts_device_reset(void) {
+	uint32_t i;
+	if (!g_fonts.initialized) return;
+	rvn_mutex_lock(&g_fonts.mutex);
+	for (i = 0; i < g_fonts.page_count; i++) {
+		rvn_atlas_page_t* page = &g_fonts.pages[i];
+		/* the texture came back transparent: the whole page goes up again at the next flush */
+		page->dirty = R_TRUE;
+		page->dirty_x0 = 0;
+		page->dirty_y0 = 0;
+		page->dirty_x1 = RVN_ATLAS_SIZE;
+		page->dirty_y1 = RVN_ATLAS_SIZE;
+	}
+	rvn_mutex_unlock(&g_fonts.mutex);
+}
+
 void rvn_fonts_flush(void) {
 	uint32_t i;
 	rvn_mutex_lock(&g_fonts.mutex);

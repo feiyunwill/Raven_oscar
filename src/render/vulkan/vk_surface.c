@@ -133,9 +133,10 @@ void rvn_vk_wait_frames(void) {
 		for (f = 0; f < RVN_VK_FRAMES; f++) {
 			rvn_vk_frame_t* frame = &surface->frames[f];
 			if (!frame->submitted) continue;
-			rvn_vk.WaitForFences(g_vk.device, 1, &frame->fence, VK_TRUE, UINT64_MAX);
-			rvn_vk.ResetFences(g_vk.device, 1, &frame->fence);
 			frame->submitted = R_FALSE;
+			/* (a lost device signals nothing any more: there is nothing to wait for) */
+			if (g_vk.device_lost || rvn_vk_failed(rvn_vk.WaitForFences(g_vk.device, 1, &frame->fence, VK_TRUE, UINT64_MAX), "vkWaitForFences")) continue;
+			rvn_vk.ResetFences(g_vk.device, 1, &frame->fence);
 		}
 	}
 }
@@ -392,6 +393,9 @@ int rvn_vk_surface_create(Rid window, const RNativeWindow* native, Ruint width, 
 	uint32_t index = R_ID_INDEX(window), i;
 	rvn_vk_surface_t* surface;
 	VkBool32 supported = VK_FALSE;
+
+	/* the device is lost: the surface is made when Raven starts the backend again (render/device.c) */
+	if (!rvn_vk_usable()) return R_TRUE;
 
 	if (index >= g_vk.surface_cap) {
 		uint32_t cap = g_vk.surface_cap ? g_vk.surface_cap : 8;

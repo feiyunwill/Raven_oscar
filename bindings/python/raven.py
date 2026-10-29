@@ -1576,6 +1576,14 @@ def _adapt_RErrorCallback(function):
         function(_e(RError, code), _e(RSeverity, severity), _r(detail))
     return call
 
+RDeviceResetCallback = ctypes.CFUNCTYPE(None, ctypes.c_void_p)
+
+
+def _adapt_RDeviceResetCallback(function):
+    def call(user_data):
+        function(user_data)
+    return call
+
 RDropCallback = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_uint32, ctypes.POINTER(RDropEvent), ctypes.c_void_p)
 
 
@@ -2484,6 +2492,14 @@ _lib.Rerror_set_callback.restype = None
 
 def Rerror_set_callback(callback):
     _lib.Rerror_set_callback(_callback(RErrorCallback, _adapt_RErrorCallback, callback))
+
+
+_lib.Rset_device_reset_callback.argtypes = [RDeviceResetCallback, ctypes.c_void_p]
+_lib.Rset_device_reset_callback.restype = None
+
+
+def Rset_device_reset_callback(callback, user_data=None):
+    _lib.Rset_device_reset_callback(_callback(RDeviceResetCallback, _adapt_RDeviceResetCallback, callback), user_data)
 
 
 _lib.Rwindow_get_frame_stats.argtypes = [ctypes.c_uint32, ctypes.POINTER(RFrameStats)]

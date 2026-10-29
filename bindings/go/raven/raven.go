@@ -5256,20 +5256,20 @@ func HostInjectClose(window ID) {
 // Left to cgo (a pointer to a structure, a void* or a C callback among the parameters):
 // Rinit_ex, Rset_allocator, Rallocator_get_system, Rmemory_alloc, Rmemory_realloc, Rmemory_free
 // Rmemory_get_stats, Rset_frame_callback, Rtask_post, Rtask_run_async, Rparallel_for, Rtimer_create
-// Raction_bind, Raction_set_default_handler, Rerror_get_last, Rerror_set_callback, Rwindow_get_frame_stats
-// Rwindow_set_icon, Rwindow_set_close_callback, Rwindow_set_resize_callback, Rwindow_set_drop_callback
-// Rwindow_set_user_handle, Rwindow_get_user_handle, Rwindow_get_native_handle, Rwindow_capture
-// Rwindow_inject_drop, Rwindow_set_event_hook, Rtexture_create_from_pixels, Rtexture_update, Rimage_decode
-// Rpixels_free, Rwidget_set_user_handle, Rwidget_get_user_handle, Rwidget_set_destroy_callback
-// Rwidget_set_event_callback, Rwidget_set_drop_callback, Rtab_view_set_changed_callback
-// Rtab_view_set_close_callback, Rexpander_set_changed_callback, Rlabel_set_link_callback
-// Rbutton_set_clicked_callback, Rcheckbox_set_changed_callback, Rslider_set_changed_callback
-// Rtext_input_set_changed_callback, Rtext_input_set_committed_callback, Rspin_box_set_changed_callback
-// Rcombo_box_set_changed_callback, Rlist_view_set_virtual_items, Rlist_view_set_selection_changed_callback
-// Rlist_view_set_activated_callback, Rtree_item_set_user_handle, Rtree_item_get_user_handle
-// Rtree_view_set_selection_changed_callback, Rtree_view_set_activated_callback
-// Rtree_view_set_context_callback, Rmenu_item_set_clicked_callback, Rtile_view_set_items
-// Rtile_view_set_drag_data_callback, Rtile_view_set_selection_changed_callback
+// Raction_bind, Raction_set_default_handler, Rerror_get_last, Rerror_set_callback
+// Rset_device_reset_callback, Rwindow_get_frame_stats, Rwindow_set_icon, Rwindow_set_close_callback
+// Rwindow_set_resize_callback, Rwindow_set_drop_callback, Rwindow_set_user_handle, Rwindow_get_user_handle
+// Rwindow_get_native_handle, Rwindow_capture, Rwindow_inject_drop, Rwindow_set_event_hook
+// Rtexture_create_from_pixels, Rtexture_update, Rimage_decode, Rpixels_free, Rwidget_set_user_handle
+// Rwidget_get_user_handle, Rwidget_set_destroy_callback, Rwidget_set_event_callback
+// Rwidget_set_drop_callback, Rtab_view_set_changed_callback, Rtab_view_set_close_callback
+// Rexpander_set_changed_callback, Rlabel_set_link_callback, Rbutton_set_clicked_callback
+// Rcheckbox_set_changed_callback, Rslider_set_changed_callback, Rtext_input_set_changed_callback
+// Rtext_input_set_committed_callback, Rspin_box_set_changed_callback, Rcombo_box_set_changed_callback
+// Rlist_view_set_virtual_items, Rlist_view_set_selection_changed_callback, Rlist_view_set_activated_callback
+// Rtree_item_set_user_handle, Rtree_item_get_user_handle, Rtree_view_set_selection_changed_callback
+// Rtree_view_set_activated_callback, Rtree_view_set_context_callback, Rmenu_item_set_clicked_callback
+// Rtile_view_set_items, Rtile_view_set_drag_data_callback, Rtile_view_set_selection_changed_callback
 // Rtile_view_set_activated_callback, Rtile_view_set_context_callback, Rtext_editor_set_zoom_callback
 // Rlanguage_register, Rlanguage_get, Rtext_editor_set_completion_callback, Rtext_editor_set_changed_callback
 // Rdock_area_set_close_callback, Rdock_area_set_changed_callback, Risland_set_changed_callback
