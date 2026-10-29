@@ -490,7 +490,8 @@ static void collect(node_t* node, const char* unit) {
 			if (is_template_parameter(node, function)) { free(function); continue; }
 			if (!is_callable(function)) die(node->line, "%s=\"%s\": the braces hold the name of a function", a->name, a->value);
 			for (i = 0; i < g_binding_count; i++) if (!strcmp(g_bindings[i].function, function)) found = i;
-			if (found < 0) {
+			if (found >= 0) free(function);
+			else {
 				snprintf(action, sizeof(action), "ravenc.%s.%s", unit, function);
 				g_bindings = (binding_t*)realloc(g_bindings, sizeof(binding_t) * (size_t)(g_binding_count + 1));
 				g_bindings[g_binding_count].function = function;
@@ -498,7 +499,8 @@ static void collect(node_t* node, const char* unit) {
 				g_bindings[g_binding_count].line = node->line;
 				found = g_binding_count++;
 			}
-			a->value = g_bindings[found].action;
+			free(a->value);
+			a->value = xstrndup(g_bindings[found].action, strlen(g_bindings[found].action));
 		}
 		if (iequal(a->name, "Name") && is_identifier(a->value) && !inside_declaration(node) && !iequal(node->tag, "Widget")) {
 			int i, seen = 0;
@@ -510,6 +512,43 @@ static void collect(node_t* node, const char* unit) {
 		}
 	}
 	for (child = node->first_child; child; child = child->next) collect(child, unit);
+}
+
+/* Everything the parser and collect() allocated (ravenc exits right after, but
+ * the tests run it under LeakSanitizer). */
+static void free_node(node_t* node) {
+	while (node) {
+		node_t* next = node->next;
+		attribute_t* a = node->attributes;
+		while (a) {
+			attribute_t* an = a->next;
+			free(a->name);
+			free(a->value);
+			free(a);
+			a = an;
+		}
+		free_node(node->first_child);
+		free(node->tag);
+		free(node->text);
+		free(node);
+		node = next;
+	}
+}
+
+static void free_all(parser_t* ps) {
+	int i;
+	free_node(ps->root);
+	for (i = 0; i < ps->script_count; i++) free(ps->scripts[i].code);
+	free(ps->scripts);
+	for (i = 0; i < g_binding_count; i++) {
+		free(g_bindings[i].function);
+		free(g_bindings[i].action);
+	}
+	free(g_bindings);
+	free(g_table);
+	free(g_names);         /* (the names belong to the attributes) */
+	g_bindings = NULL; g_table = NULL; g_names = NULL;
+	g_binding_count = g_count = g_name_count = 0;
 }
 
 static void line_directive(buffer_t* out, int line, const char* path) {
@@ -861,6 +900,8 @@ static void emit_go(buffer_t* out, const parser_t* ps, const char* unit, const c
 		memcpy(copy.scripts, ps->scripts, sizeof(script_t) * (size_t)ps->script_count);
 		copy.scripts[0].code = code.data;
 		emit_scripts_in_place(out, &copy, NULL);
+		free(copy.scripts);
+		free(code.data);
 	} else {
 		char first[160];
 		snprintf(first, sizeof(first), "package main; %s", import_line);
@@ -1109,7 +1150,7 @@ int main(int argc, char** argv) {
 	char* out_path;
 	char* unit;
 	size_t size = 0;
-	int i, is_window;
+	int i, is_window, result;
 	lang_t lang = LANG_C;
 	FILE* f;
 
@@ -1156,9 +1197,16 @@ int main(int argc, char** argv) {
 	}
 
 	f = fopen(output, "wb");
-	if (!f || fwrite(out.data, 1, out.size, f) != out.size || fclose(f) != 0) {
-		fprintf(stderr, "ravenc: cannot write %s\n", output);
-		return 1;
-	}
-	return 0;
+	result = 0;
+	if (!f || fwrite(out.data, 1, out.size, f) != out.size) result = 1;
+	if (f && fclose(f) != 0) result = 1;
+	if (result) fprintf(stderr, "ravenc: cannot write %s\n", output);
+
+	free_all(&ps);
+	free(out.data);
+	free(source);
+	free(source_path);
+	free(out_path);
+	free(unit);
+	return result;
 }
