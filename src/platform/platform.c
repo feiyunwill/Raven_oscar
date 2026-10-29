@@ -6,6 +6,7 @@
 #include "platform.h"
 
 const rvn_platform_t* rvn_platform_select(int headless) {
+	if (rvn_host_platform_registered()) return rvn_platform_host();
 	if (headless) return rvn_platform_null();
 #if defined(RAVEN_PLATFORM_WIN32)
 	return rvn_platform_win32();

@@ -1516,6 +1516,16 @@ class RAccessibilitySettings(ctypes.Structure):
     ]
 
 
+class RHostPlatformDesc(ctypes.Structure):
+    _fields_ = [
+        ("set_cursor", ctypes.c_void_p),
+        ("clipboard_set", ctypes.c_void_p),
+        ("clipboard_get", ctypes.c_void_p),
+        ("wake", ctypes.c_void_p),
+        ("user_data", ctypes.c_void_p),
+    ]
+
+
 RFrameCallback = ctypes.CFUNCTYPE(None, ctypes.c_double, ctypes.c_void_p)
 
 
@@ -3035,6 +3045,41 @@ _lib.Rwindow_has_popup.restype = ctypes.c_int
 def Rwindow_has_popup(window):
     """R_TRUE while a menu, list or dialog is open over the window."""
     return _lib.Rwindow_has_popup(window)
+
+
+_lib.Rwindow_get_text_input_rect.argtypes = [ctypes.c_uint32, ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int), ctypes.POINTER(ctypes.c_int)]
+_lib.Rwindow_get_text_input_rect.restype = ctypes.c_int
+
+
+def Rwindow_get_text_input_rect(window):
+    """Last painted caret in window pixels (x, y, width, height), including scrolling and scale.
+    Call after Rdraw_frame. Independent of the blink phase. Returns R_FALSE and zeros the
+    outputs when there is no visible editable caret, the window is inactive, or focus changed
+    since painting. Any output pointer may be NULL."""
+    x_ = ctypes.c_int()
+    y_ = ctypes.c_int()
+    width_ = ctypes.c_int()
+    height_ = ctypes.c_int()
+    result = _lib.Rwindow_get_text_input_rect(window, ctypes.byref(x_), ctypes.byref(y_), ctypes.byref(width_), ctypes.byref(height_))
+    return (result, x_.value, y_.value, width_.value, height_.value)
+
+
+_lib.Rwindow_get_popup_count.argtypes = [ctypes.c_uint32]
+_lib.Rwindow_get_popup_count.restype = ctypes.c_int
+
+
+def Rwindow_get_popup_count(window):
+    """Returns: Number of open in-window popups (menus, combo lists, pickers), bottom to top."""
+    return _lib.Rwindow_get_popup_count(window)
+
+
+_lib.Rwindow_get_popup.argtypes = [ctypes.c_uint32, ctypes.c_int]
+_lib.Rwindow_get_popup.restype = ctypes.c_uint32
+
+
+def Rwindow_get_popup(window, index):
+    """Returns: Root widget of popup `index`, whose rect is in window coordinates; R_INVALID_ID out of range."""
+    return _lib.Rwindow_get_popup(window, index)
 
 
 _lib.Rwindow_set_tab_navigation.argtypes = [ctypes.c_uint32, ctypes.c_int]
@@ -10060,3 +10105,99 @@ _lib.Raccessibility_is_screen_reader_active.restype = ctypes.c_int
 def Raccessibility_is_screen_reader_active():
     """R_TRUE when a screen reader is reading the windows of the application."""
     return _lib.Raccessibility_is_screen_reader_active()
+
+
+_lib.Rhost_platform_register.argtypes = [ctypes.POINTER(RHostPlatformDesc)]
+_lib.Rhost_platform_register.restype = None
+
+
+def Rhost_platform_register(desc):
+    """Makes the next Rinit use the host platform. The structure is copied; NULL restores the default."""
+    _lib.Rhost_platform_register(_p(desc))
+
+
+_lib.Rhost_platform_is_active.argtypes = []
+_lib.Rhost_platform_is_active.restype = ctypes.c_int
+
+
+def Rhost_platform_is_active():
+    """Returns: R_TRUE while the running library uses the host platform."""
+    return _lib.Rhost_platform_is_active()
+
+
+_lib.Rhost_window_set_size.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_int, ctypes.c_float]
+_lib.Rhost_window_set_size.restype = None
+
+
+def Rhost_window_set_size(window, width, height, scale):
+    """Size of a host window in pixels, and pixels per logical unit."""
+    _lib.Rhost_window_set_size(window, width, height, scale)
+
+
+_lib.Rhost_inject_mouse_move.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_int, ctypes.c_uint32]
+_lib.Rhost_inject_mouse_move.restype = None
+
+
+def Rhost_inject_mouse_move(window, x, y, modifiers):
+    _lib.Rhost_inject_mouse_move(window, x, y, modifiers)
+
+
+_lib.Rhost_inject_mouse_button.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_uint32]
+_lib.Rhost_inject_mouse_button.restype = None
+
+
+def Rhost_inject_mouse_button(window, x, y, button, pressed, modifiers):
+    _lib.Rhost_inject_mouse_button(window, x, y, int(button), pressed, modifiers)
+
+
+_lib.Rhost_inject_mouse_wheel.argtypes = [ctypes.c_uint32, ctypes.c_float, ctypes.c_float, ctypes.c_uint32]
+_lib.Rhost_inject_mouse_wheel.restype = None
+
+
+def Rhost_inject_mouse_wheel(window, wheel_x, wheel_y, modifiers):
+    _lib.Rhost_inject_mouse_wheel(window, wheel_x, wheel_y, modifiers)
+
+
+_lib.Rhost_inject_mouse_leave.argtypes = [ctypes.c_uint32]
+_lib.Rhost_inject_mouse_leave.restype = None
+
+
+def Rhost_inject_mouse_leave(window):
+    """The pointer left the window: hover states end."""
+    _lib.Rhost_inject_mouse_leave(window)
+
+
+_lib.Rhost_inject_key.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_int, ctypes.c_uint32, ctypes.c_int]
+_lib.Rhost_inject_key.restype = None
+
+
+def Rhost_inject_key(window, key, pressed, modifiers, repeat):
+    """repeat R_TRUE for a key held down (auto-repeat)."""
+    _lib.Rhost_inject_key(window, int(key), pressed, modifiers, repeat)
+
+
+_lib.Rhost_inject_text.argtypes = [ctypes.c_uint32, ctypes.c_uint32]
+_lib.Rhost_inject_text.restype = None
+
+
+def Rhost_inject_text(window, codepoint):
+    """One typed Unicode code point."""
+    _lib.Rhost_inject_text(window, codepoint)
+
+
+_lib.Rhost_inject_focus.argtypes = [ctypes.c_uint32, ctypes.c_int]
+_lib.Rhost_inject_focus.restype = None
+
+
+def Rhost_inject_focus(window, focused):
+    """The window gained or lost the keyboard. Losing it closes popups and drops captures."""
+    _lib.Rhost_inject_focus(window, focused)
+
+
+_lib.Rhost_inject_close.argtypes = [ctypes.c_uint32]
+_lib.Rhost_inject_close.restype = None
+
+
+def Rhost_inject_close(window):
+    """The user asked to close the window (its close callback decides)."""
+    _lib.Rhost_inject_close(window)

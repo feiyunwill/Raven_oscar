@@ -1358,6 +1358,34 @@ func WindowHasPopup(window ID) int {
 	return int(C.Rwindow_has_popup(C.Rid(window)))
 }
 
+// WindowGetTextInputRect: Last painted caret in window pixels (x, y, width, height), including scrolling and
+// scale. Call after Rdraw_frame. Independent of the blink phase. Returns R_FALSE and zeros the outputs when
+// there is no visible editable caret, the window is inactive, or focus changed since painting. Any output
+// pointer may be NULL.
+func WindowGetTextInputRect(window ID) (result int, x int, y int, width int, height int) {
+	var x_ C.int
+	var y_ C.int
+	var width_ C.int
+	var height_ C.int
+	result = int(C.Rwindow_get_text_input_rect(C.Rid(window), &x_, &y_, &width_, &height_))
+	x = int(x_)
+	y = int(y_)
+	width = int(width_)
+	height = int(height_)
+	return
+}
+
+// WindowGetPopupCount: Returns: Number of open in-window popups (menus, combo lists, pickers), bottom to top.
+func WindowGetPopupCount(window ID) int {
+	return int(C.Rwindow_get_popup_count(C.Rid(window)))
+}
+
+// WindowGetPopup: Returns: Root widget of popup `index`, whose rect is in window coordinates; R_INVALID_ID
+// out of range.
+func WindowGetPopup(window ID, index int) ID {
+	return ID(C.Rwindow_get_popup(C.Rid(window), C.int(index)))
+}
+
 // WindowSetTabNavigation: R_FALSE: Tab no longer moves the keyboard focus (the application uses it as a
 // shortcut). Default R_TRUE.
 func WindowSetTabNavigation(window ID, enabled int) {
@@ -5128,6 +5156,53 @@ func AccessibilityIsScreenReaderActive() int {
 	return int(C.Raccessibility_is_screen_reader_active())
 }
 
+// HostPlatformIsActive: Returns: R_TRUE while the running library uses the host platform.
+func HostPlatformIsActive() int {
+	return int(C.Rhost_platform_is_active())
+}
+
+// HostWindowSetSize: Size of a host window in pixels, and pixels per logical unit.
+func HostWindowSetSize(window ID, width int, height int, scale float32) {
+	C.Rhost_window_set_size(C.Rid(window), C.int(width), C.int(height), C.float(scale))
+}
+
+func HostInjectMouseMove(window ID, x int, y int, modifiers uint32) {
+	C.Rhost_inject_mouse_move(C.Rid(window), C.int(x), C.int(y), C.Ruint(modifiers))
+}
+
+func HostInjectMouseButton(window ID, x int, y int, button RMouseButton, pressed int, modifiers uint32) {
+	C.Rhost_inject_mouse_button(C.Rid(window), C.int(x), C.int(y), C.RMouseButton(button), C.int(pressed), C.Ruint(modifiers))
+}
+
+func HostInjectMouseWheel(window ID, wheel_x float32, wheel_y float32, modifiers uint32) {
+	C.Rhost_inject_mouse_wheel(C.Rid(window), C.float(wheel_x), C.float(wheel_y), C.Ruint(modifiers))
+}
+
+// HostInjectMouseLeave: The pointer left the window: hover states end.
+func HostInjectMouseLeave(window ID) {
+	C.Rhost_inject_mouse_leave(C.Rid(window))
+}
+
+// HostInjectKey: repeat R_TRUE for a key held down (auto-repeat).
+func HostInjectKey(window ID, key RKey, pressed int, modifiers uint32, repeat int) {
+	C.Rhost_inject_key(C.Rid(window), C.RKey(key), C.int(pressed), C.Ruint(modifiers), C.int(repeat))
+}
+
+// HostInjectText: One typed Unicode code point.
+func HostInjectText(window ID, codepoint uint32) {
+	C.Rhost_inject_text(C.Rid(window), C.Ruint(codepoint))
+}
+
+// HostInjectFocus: The window gained or lost the keyboard. Losing it closes popups and drops captures.
+func HostInjectFocus(window ID, focused int) {
+	C.Rhost_inject_focus(C.Rid(window), C.int(focused))
+}
+
+// HostInjectClose: The user asked to close the window (its close callback decides).
+func HostInjectClose(window ID) {
+	C.Rhost_inject_close(C.Rid(window))
+}
+
 // Left to cgo (a pointer to a structure, a void* or a C callback among the parameters):
 // Rinit_ex, Rset_allocator, Rallocator_get_system, Rmemory_alloc, Rmemory_realloc, Rmemory_free
 // Rmemory_get_stats, Rset_frame_callback, Rtask_post, Rtask_run_async, Rparallel_for, Rtimer_create
@@ -5163,4 +5238,4 @@ func AccessibilityIsScreenReaderActive() int {
 // Reffect_get_defaults, Rshader_look_init, Rshader_look_defaults, Rdraw_shader, Rborder_set_effect
 // Rwindow_create_from_compiled, Rwidget_create_from_compiled, Rxml_set_reload_callback, Rxml_register_tag
 // Rxml_document_parse, Rxml_get_attribute_info, Rlocale_set_changed_callback, Rtr_format
-// Raccessibility_get_system_settings
+// Raccessibility_get_system_settings, Rhost_platform_register

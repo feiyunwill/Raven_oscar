@@ -575,6 +575,9 @@ struct rvn_window_t {
 	/* input state */
 	rvn_widget_t* hover;
 	rvn_widget_t* focus;
+	/** Last painted editable caret, in surface pixels; its owner guards against stale focus. */
+	rvn_box_t text_input_rect;
+	Rid text_input_owner;
 	rvn_widget_t* capture;
 	/** R_TRUE when the focus was moved with the keyboard: widgets then draw a focus outline. */
 	int focus_visible;

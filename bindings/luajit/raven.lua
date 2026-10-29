@@ -625,6 +625,7 @@ typedef struct RXmlError RXmlError;
 typedef struct RXmlAttributeInfo RXmlAttributeInfo;
 typedef struct RXmlCompiledNode RXmlCompiledNode;
 typedef struct RAccessibilitySettings RAccessibilitySettings;
+typedef struct RHostPlatformDesc RHostPlatformDesc;
 typedef void (*RFrameCallback)(double delta_seconds, void* user_data);
 typedef void (*RTaskCallback)(void* user_data);
 typedef void (*RParallelRangeCallback)(Ruint begin, Ruint end, void* user_data);
@@ -853,6 +854,13 @@ struct RAccessibilitySettings {
 	int reduce_motion;
 	int screen_reader;
 };
+struct RHostPlatformDesc {
+	void* set_cursor;
+	void* clipboard_set;
+	void* clipboard_get;
+	void* wake;
+	void* user_data;
+};
 int Rinit(RBackend backend);
 int Rinit_ex(const RInitDesc* desc);
 void Rshutdown(void);
@@ -967,6 +975,9 @@ Ruint Rwindow_get_modifiers(Rid window);
 int Rwindow_is_mouse_inside(Rid window);
 int Rwindow_wants_text_input(Rid window);
 int Rwindow_has_popup(Rid window);
+int Rwindow_get_text_input_rect(Rid window, int* x, int* y, int* width, int* height);
+int Rwindow_get_popup_count(Rid window);
+Rid Rwindow_get_popup(Rid window, int index);
 void Rwindow_set_tab_navigation(Rid window, int enabled);
 void Rwindow_set_event_hook(Rid window, RWindowEventHook hook, void* user_data);
 int Rdrag_begin(Rid source, const char* type, const char* data, const char* label);
@@ -1732,6 +1743,17 @@ void Rwidget_set_accessible_hidden(Rid widget, int hidden);
 void Rwidget_set_accessible_labelled_by(Rid widget, Rid label);
 void Raccessibility_announce(const char* text, int assertive);
 int Raccessibility_is_screen_reader_active(void);
+void Rhost_platform_register(const RHostPlatformDesc* desc);
+int Rhost_platform_is_active(void);
+void Rhost_window_set_size(Rid window, int width, int height, float scale);
+void Rhost_inject_mouse_move(Rid window, int x, int y, Ruint modifiers);
+void Rhost_inject_mouse_button(Rid window, int x, int y, RMouseButton button, int pressed, Ruint modifiers);
+void Rhost_inject_mouse_wheel(Rid window, float wheel_x, float wheel_y, Ruint modifiers);
+void Rhost_inject_mouse_leave(Rid window);
+void Rhost_inject_key(Rid window, RKey key, int pressed, Ruint modifiers, int repeat);
+void Rhost_inject_text(Rid window, uint32_t codepoint);
+void Rhost_inject_focus(Rid window, int focused);
+void Rhost_inject_close(Rid window);
 ]]
 
 local library = ffi.load(os.getenv("RAVEN_LIBRARY") or "raven")

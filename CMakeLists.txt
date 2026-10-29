@@ -101,6 +101,7 @@ set(RAVEN_PUBLIC_HEADERS
 	include/raven/raven_locale.h
 	include/raven/raven_accessibility.h
 	include/raven/raven_backend.h
+	include/raven/raven_host.h
 	include/raven/raven_vulkan.h
 )
 
@@ -133,6 +134,7 @@ set(RAVEN_PLATFORM_SOURCES
 	src/platform/platform.c
 	src/platform/platform.h
 	src/platform/null/null_platform.c
+	src/platform/host/host_platform.c
 )
 
 set(RAVEN_RENDER_SOURCES
@@ -228,6 +230,12 @@ set(RAVEN_XML_SOURCES
 
 set(RAVEN_DEFINITIONS "")
 set(RAVEN_LIBRARIES "")
+
+# core/file.c uses CoreFoundation even with the null or host platform.
+if(APPLE)
+	find_library(RAVEN_COREFOUNDATION_FRAMEWORK CoreFoundation REQUIRED)
+	list(APPEND RAVEN_LIBRARIES ${RAVEN_COREFOUNDATION_FRAMEWORK})
+endif()
 
 # The HTTP(S) image loader uses WinHTTP even in a headless Windows build.
 if(WIN32)

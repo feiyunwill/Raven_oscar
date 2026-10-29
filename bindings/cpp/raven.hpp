@@ -1742,6 +1742,18 @@ public:
 	/// R_TRUE while a menu, list or dialog is open over the window.
 	int has_popup() const { return Rwindow_has_popup(id_); }
 
+	/// Last painted caret in window pixels (x, y, width, height), including scrolling and scale.
+	/// Call after Rdraw_frame. Independent of the blink phase. Returns R_FALSE and zeros the
+	/// outputs when there is no visible editable caret, the window is inactive, or focus changed
+	/// since painting. Any output pointer may be NULL.
+	int get_text_input_rect(int* x, int* y, int* width, int* height) const { return Rwindow_get_text_input_rect(id_, x, y, width, height); }
+
+	/// Returns: Number of open in-window popups (menus, combo lists, pickers), bottom to top.
+	int get_popup_count() const { return Rwindow_get_popup_count(id_); }
+
+	/// Returns: Root widget of popup `index`, whose rect is in window coordinates; R_INVALID_ID out of range.
+	Rid get_popup(int index) const { return Rwindow_get_popup(id_, index); }
+
 	/// R_FALSE: Tab no longer moves the keyboard focus (the application uses it as a shortcut). Default R_TRUE.
 	void set_tab_navigation(int enabled) const { Rwindow_set_tab_navigation(id_, enabled); }
 
@@ -3345,6 +3357,36 @@ inline void accessibility_announce(const char* text, int assertive) { Raccessibi
 
 /// R_TRUE when a screen reader is reading the windows of the application.
 inline int accessibility_is_screen_reader_active() { return Raccessibility_is_screen_reader_active(); }
+
+/// Makes the next Rinit use the host platform. The structure is copied; NULL restores the default.
+inline void host_platform_register(const RHostPlatformDesc* desc) { Rhost_platform_register(desc); }
+
+/// Returns: R_TRUE while the running library uses the host platform.
+inline int host_platform_is_active() { return Rhost_platform_is_active(); }
+
+/// Size of a host window in pixels, and pixels per logical unit.
+inline void host_window_set_size(Rid window, int width, int height, float scale) { Rhost_window_set_size(window, width, height, scale); }
+
+inline void host_inject_mouse_move(Rid window, int x, int y, Ruint modifiers) { Rhost_inject_mouse_move(window, x, y, modifiers); }
+
+inline void host_inject_mouse_button(Rid window, int x, int y, RMouseButton button, int pressed, Ruint modifiers) { Rhost_inject_mouse_button(window, x, y, button, pressed, modifiers); }
+
+inline void host_inject_mouse_wheel(Rid window, float wheel_x, float wheel_y, Ruint modifiers) { Rhost_inject_mouse_wheel(window, wheel_x, wheel_y, modifiers); }
+
+/// The pointer left the window: hover states end.
+inline void host_inject_mouse_leave(Rid window) { Rhost_inject_mouse_leave(window); }
+
+/// repeat R_TRUE for a key held down (auto-repeat).
+inline void host_inject_key(Rid window, RKey key, int pressed, Ruint modifiers, int repeat) { Rhost_inject_key(window, key, pressed, modifiers, repeat); }
+
+/// One typed Unicode code point.
+inline void host_inject_text(Rid window, uint32_t codepoint) { Rhost_inject_text(window, codepoint); }
+
+/// The window gained or lost the keyboard. Losing it closes popups and drops captures.
+inline void host_inject_focus(Rid window, int focused) { Rhost_inject_focus(window, focused); }
+
+/// The user asked to close the window (its close callback decides).
+inline void host_inject_close(Rid window) { Rhost_inject_close(window); }
 
 } // namespace raven
 

@@ -203,7 +203,7 @@ static void rvn_paint_children(rvn_widget_t* widget, const RPainter* painter) {
 void rvn_widget_paint(rvn_widget_t* widget, const RPainter* parent) {
 	RPainter painter;
 	rvn_box_t bounds;
-	rvn_transition_state_t transition;
+	rvn_transition_state_t transition = {0};
 	uint32_t first_instance, first_command;
 
 	if (widget->visibility != R_VISIBLE || widget->opacity <= 0.0f) return;
@@ -285,6 +285,20 @@ void rvn_widget_paint(rvn_widget_t* widget, const RPainter* parent) {
 		rvn_drawlist_transform(painter.list, first_instance, first_command, sx, sy,
 			(painter.ox + widget->rect.w * pivot_x) * painter.scale, (painter.oy + widget->rect.h * pivot_y) * painter.scale,
 			dx * painter.scale, dy * painter.scale, parent->clip);
+		/* The host's IME rectangle follows the same subtree transform as the painted caret. */
+		/* Only this focus ancestor reads the result, after its child paint jobs have joined.
+		   Sibling subtrees may still be painting and must not touch the shared caret state. */
+		if (rvn_widget_is_inside(painter.window->focus, widget) && painter.window->text_input_owner != R_INVALID_ID) {
+			rvn_box_t box = painter.window->text_input_rect;
+			float px = (painter.ox + widget->rect.w * pivot_x) * painter.scale;
+			float py = (painter.oy + widget->rect.h * pivot_y) * painter.scale;
+			float x0 = px + (box.x0 - px) * sx + dx * painter.scale;
+			float x1 = px + (box.x1 - px) * sx + dx * painter.scale;
+			float y0 = py + (box.y0 - py) * sy + dy * painter.scale;
+			float y1 = py + (box.y1 - py) * sy + dy * painter.scale;
+			painter.window->text_input_rect = rvn_box_intersect(
+				rvn_box(rvn_minf(x0, x1), rvn_minf(y0, y1), rvn_maxf(x0, x1), rvn_maxf(y0, y1)), parent->clip);
+		}
 	}
 }
 

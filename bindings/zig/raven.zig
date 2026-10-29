@@ -1317,6 +1317,18 @@ pub const RAccessibilitySettings = extern struct {
     screen_reader: c_int = 0,
 };
 
+pub const RHostPlatformDesc = extern struct {
+    /// The pointer over `window` should look like `cursor`. May be NULL.
+    set_cursor: ?*const anyopaque = null,
+    /// Copies UTF-8 text to the clipboard of the application. NULL: the clipboard stays in the process.
+    clipboard_set: ?*const anyopaque = null,
+    /// The clipboard text, valid until the next call, or NULL. NULL: the clipboard stays in the process.
+    clipboard_get: ?*const anyopaque = null,
+    /// Raven has work to do (a timer, a posted task, a redraw): produce a frame soon. Thread-safe. May be NULL.
+    wake: ?*const anyopaque = null,
+    user_data: ?*anyopaque = null,
+};
+
 /// Starts the library with default settings on the given backend.
 /// The calling thread becomes the UI thread.
 /// Returns: R_TRUE on success. On failure, see Rerror_get_last.
@@ -1578,6 +1590,15 @@ pub extern fn Rwindow_is_mouse_inside(window: Rid) c_int;
 pub extern fn Rwindow_wants_text_input(window: Rid) c_int;
 /// R_TRUE while a menu, list or dialog is open over the window.
 pub extern fn Rwindow_has_popup(window: Rid) c_int;
+/// Last painted caret in window pixels (x, y, width, height), including scrolling and scale.
+/// Call after Rdraw_frame. Independent of the blink phase. Returns R_FALSE and zeros the
+/// outputs when there is no visible editable caret, the window is inactive, or focus changed
+/// since painting. Any output pointer may be NULL.
+pub extern fn Rwindow_get_text_input_rect(window: Rid, x: ?*c_int, y: ?*c_int, width: ?*c_int, height: ?*c_int) c_int;
+/// Returns: Number of open in-window popups (menus, combo lists, pickers), bottom to top.
+pub extern fn Rwindow_get_popup_count(window: Rid) c_int;
+/// Returns: Root widget of popup `index`, whose rect is in window coordinates; R_INVALID_ID out of range.
+pub extern fn Rwindow_get_popup(window: Rid, index: c_int) Rid;
 /// R_FALSE: Tab no longer moves the keyboard focus (the application uses it as a shortcut). Default R_TRUE.
 pub extern fn Rwindow_set_tab_navigation(window: Rid, enabled: c_int) void;
 pub extern fn Rwindow_set_event_hook(window: Rid, hook: RWindowEventHook, user_data: ?*anyopaque) void;
@@ -3123,3 +3144,22 @@ pub extern fn Rwidget_set_accessible_labelled_by(widget: Rid, label: Rid) void;
 pub extern fn Raccessibility_announce(text: ?[*:0]const u8, assertive: c_int) void;
 /// R_TRUE when a screen reader is reading the windows of the application.
 pub extern fn Raccessibility_is_screen_reader_active() c_int;
+/// Makes the next Rinit use the host platform. The structure is copied; NULL restores the default.
+pub extern fn Rhost_platform_register(desc: ?*const RHostPlatformDesc) void;
+/// Returns: R_TRUE while the running library uses the host platform.
+pub extern fn Rhost_platform_is_active() c_int;
+/// Size of a host window in pixels, and pixels per logical unit.
+pub extern fn Rhost_window_set_size(window: Rid, width: c_int, height: c_int, scale: f32) void;
+pub extern fn Rhost_inject_mouse_move(window: Rid, x: c_int, y: c_int, modifiers: u32) void;
+pub extern fn Rhost_inject_mouse_button(window: Rid, x: c_int, y: c_int, button: RMouseButton, pressed: c_int, modifiers: u32) void;
+pub extern fn Rhost_inject_mouse_wheel(window: Rid, wheel_x: f32, wheel_y: f32, modifiers: u32) void;
+/// The pointer left the window: hover states end.
+pub extern fn Rhost_inject_mouse_leave(window: Rid) void;
+/// repeat R_TRUE for a key held down (auto-repeat).
+pub extern fn Rhost_inject_key(window: Rid, key: RKey, pressed: c_int, modifiers: u32, repeat: c_int) void;
+/// One typed Unicode code point.
+pub extern fn Rhost_inject_text(window: Rid, codepoint: u32) void;
+/// The window gained or lost the keyboard. Losing it closes popups and drops captures.
+pub extern fn Rhost_inject_focus(window: Rid, focused: c_int) void;
+/// The user asked to close the window (its close callback decides).
+pub extern fn Rhost_inject_close(window: Rid) void;
