@@ -1,6 +1,6 @@
 [package]
 name = "raven-gui-build"
-version = "0.1.0"
+version = "0.1.3"
 edition = "2018"
 description = "Compiles the .xmlrs files of a crate (Raven XML + Rust) with ravenc, from build.rs"
 license = "Apache-2.0"

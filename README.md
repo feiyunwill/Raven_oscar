@@ -464,7 +464,7 @@ dist.bat --test       :: also runs the tests of each build
 ```
 
 ```
-dist\raven-0.1.0\
+dist\raven-0.1.3\
     msvc-static\     include\, lib\raven.lib, lib\cmake\raven, bin\raven_designer.exe, bin\ravenc.exe, share\raven\
     msvc-shared\     bin\raven.dll, lib\raven.lib (to link with the DLL), the rest as above
     mingw-static\    lib\libraven.a, the rest as above

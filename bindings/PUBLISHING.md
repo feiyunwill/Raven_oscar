@@ -24,10 +24,10 @@ bindings\package.bat
 It builds Raven (shared, Release) and writes, in `dist\bindings\`:
 
 ```
-pypi\       raven_gui-0.1.0-py3-none-win_amd64.whl
-nuget\      Raven.Gui.0.1.0.nupkg
-crates\     raven-gui-0.1.0.crate, raven-gui-build-0.1.0.crate
-luarocks\   raven-gui-0.1.0-1.rockspec
+pypi\       raven_gui-0.1.3-py3-none-win_amd64.whl
+nuget\      Raven.Gui.0.1.3.nupkg
+crates\     raven-gui-0.1.3.crate, raven-gui-build-0.1.3.crate
+luarocks\   raven-gui-0.1.3-1.rockspec
 ```
 
 It publishes nothing. A part whose tool is not installed (Python, the .NET
@@ -68,8 +68,8 @@ rem crates.io (cargo login <token> once): from the folders of the crates, raven-
 cd bindings\rust-build && cargo publish
 cd ..\rust && cargo publish
 
-rem LuaRocks: the rock is made from the git tag v0.1.0, so push the tag first
-luarocks upload luarocks\raven-gui-0.1.0-1.rockspec --api-key=<key>
+rem LuaRocks: the rock is made from the git tag v0.1.3, so push the tag first
+luarocks upload luarocks\raven-gui-0.1.3-1.rockspec --api-key=<key>
 ```
 
 A version can be published only once on each registry: to fix a published

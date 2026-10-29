@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(raven VERSION 0.1.0 DESCRIPTION "Raven - lightweight multithreaded GUI library in C" LANGUAGES C)
+project(raven VERSION 0.1.3 DESCRIPTION "Raven - lightweight multithreaded GUI library in C" LANGUAGES C)
 
 if(APPLE)
 	# Cocoa is the native macOS window API; almost all Raven code remains C.
@@ -385,7 +385,7 @@ target_include_directories(raven
 	PRIVATE
 		${CMAKE_CURRENT_SOURCE_DIR}/third_party
 )
-target_compile_definitions(raven PRIVATE ${RAVEN_DEFINITIONS})
+target_compile_definitions(raven PRIVATE ${RAVEN_DEFINITIONS} RVN_VERSION_STRING="${PROJECT_VERSION}")
 target_link_libraries(raven PRIVATE ${RAVEN_LIBRARIES})
 set_target_properties(raven PROPERTIES
 	C_STANDARD 11
