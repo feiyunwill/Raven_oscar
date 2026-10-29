@@ -5237,25 +5237,6 @@ func HostInjectClose(window ID) {
 // Rtree_view_set_selection_changed_callback, Rtree_view_set_activated_callback
 // Rtree_view_set_context_callback, Rmenu_item_set_clicked_callback, Rtile_view_set_items
 // Rtile_view_set_drag_data_callback, Rtile_view_set_selection_changed_callback
-// Rtile_view_set_activated_callback, Rtile_view_set_context_callback, Rlanguage_register, Rlanguage_get
-// Rtext_editor_set_completion_callback, Rtext_editor_set_changed_callback, Rdock_area_set_close_callback
-// Rdock_area_set_changed_callback, Risland_set_changed_callback, Rcolor_picker_set_changed_callback
-// Rtimeline_set_time_callback, Rtimeline_set_changed_callback, Rtimeline_set_selection_callback
-// Rtimeline_set_activated_callback, Rtimeline_set_removed_callback, Rnode_graph_set_node_user_data
-// Rnode_graph_get_node_user_data, Rnode_graph_set_connect_callback, Rnode_graph_set_linked_callback
-// Rnode_graph_set_unlinked_callback, Rnode_graph_set_moved_callback, Rnode_graph_set_selection_callback
-// Rnode_graph_set_removed_callback, Rnode_graph_set_activated_callback, Rnode_graph_set_context_callback
-// Rblock_editor_set_changed_callback, Rblock_editor_set_clicked_callback, Rblock_editor_set_context_callback
-// Rdialog_open, Rfile_dialog_open, Rfile_dialog_save, Rfile_dialog_select_folder, Rfile_read
-// Rfile_browser_set_filters, Rfile_browser_set_accepted_callback, Rfile_browser_set_cancelled_callback
-// Rfile_browser_set_selection_changed_callback, Rviewport_set_draw_callback, Rviewport_get_native_handle
-// Rviewport_set_resize_callback, Rcustom_set_paint_callback, Rcustom_set_measure_callback, Rdraw_rect
-// Rdraw_rect_outline, Rdraw_circle, Rdraw_line, Rdraw_curve, Rdraw_triangle, Rdraw_image, Rdraw_text
-// Rdraw_glass, Rdraw_spring, Rspring_kick, Rspring_set, Rdraw_push_clip_rect, Rdraw_pop_clip_rect
-// Reffect_get_defaults, Rshader_look_init, Rshader_look_defaults, Rdraw_shader, Rborder_set_effect
-// Rwindow_create_from_compiled, Rwidget_create_from_compiled, Rxml_set_reload_callback, Rxml_register_tag
-// Rxml_document_parse, Rxml_get_attribute_info, Rlocale_set_changed_callback, Rtr_format
-// Raccessibility_get_system_settings, Rhost_platform_register
 // Rtile_view_set_activated_callback, Rtile_view_set_context_callback, Rtext_editor_set_zoom_callback
 // Rlanguage_register, Rlanguage_get, Rtext_editor_set_completion_callback, Rtext_editor_set_changed_callback
 // Rdock_area_set_close_callback, Rdock_area_set_changed_callback, Risland_set_changed_callback
@@ -5275,3 +5256,4 @@ func HostInjectClose(window ID) {
 // Rshader_look_defaults, Rdraw_shader, Rborder_set_effect, Rwindow_create_from_compiled
 // Rwidget_create_from_compiled, Rxml_set_reload_callback, Rxml_register_tag, Rxml_document_parse
 // Rxml_get_attribute_info, Rlocale_set_changed_callback, Rtr_format, Raccessibility_get_system_settings
+// Rhost_platform_register
