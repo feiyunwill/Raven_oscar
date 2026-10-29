@@ -1867,6 +1867,28 @@ namespace Raven
         public int screen_reader;
     }
 
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RHostPlatformDesc
+    {
+        /// <summary>
+        /// The pointer over `window` should look like `cursor`. May be NULL.
+        /// </summary>
+        public IntPtr set_cursor;
+        /// <summary>
+        /// Copies UTF-8 text to the clipboard of the application. NULL: the clipboard stays in the process.
+        /// </summary>
+        public IntPtr clipboard_set;
+        /// <summary>
+        /// The clipboard text, valid until the next call, or NULL. NULL: the clipboard stays in the process.
+        /// </summary>
+        public IntPtr clipboard_get;
+        /// <summary>
+        /// Raven has work to do (a timer, a posted task, a redraw): produce a frame soon. Thread-safe. May be NULL.
+        /// </summary>
+        public IntPtr wake;
+        public IntPtr user_data;
+    }
+
     /// <summary>
     /// Registers a function called once per frame, before the layout.
     /// The body of your loop does the same job; the callback is also called
@@ -2917,6 +2939,27 @@ namespace Raven
         /// </summary>
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         public static extern int Rwindow_has_popup(uint window);
+
+        /// <summary>
+        /// Last painted caret in window pixels (x, y, width, height), including scrolling and scale.
+        /// Call after Rdraw_frame. Independent of the blink phase. Returns R_FALSE and zeros the
+        /// outputs when there is no visible editable caret, the window is inactive, or focus changed
+        /// since painting. Any output pointer may be NULL.
+        /// </summary>
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int Rwindow_get_text_input_rect(uint window, out int x, out int y, out int width, out int height);
+
+        /// <summary>
+        /// Returns: Number of open in-window popups (menus, combo lists, pickers), bottom to top.
+        /// </summary>
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int Rwindow_get_popup_count(uint window);
+
+        /// <summary>
+        /// Returns: Root widget of popup `index`, whose rect is in window coordinates; R_INVALID_ID out of range.
+        /// </summary>
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        public static extern uint Rwindow_get_popup(uint window, int index);
 
         /// <summary>
         /// R_FALSE: Tab no longer moves the keyboard focus (the application uses it as a shortcut). Default R_TRUE.
@@ -7093,5 +7136,68 @@ namespace Raven
         /// </summary>
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         public static extern int Raccessibility_is_screen_reader_active();
+
+        /// <summary>
+        /// Makes the next Rinit use the host platform. The structure is copied; NULL restores the default.
+        /// </summary>
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void Rhost_platform_register(ref RHostPlatformDesc desc);
+
+        /// <summary>
+        /// Makes the next Rinit use the host platform. The structure is copied; NULL restores the default.
+        /// </summary>
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void Rhost_platform_register(IntPtr desc);
+
+        /// <summary>
+        /// Returns: R_TRUE while the running library uses the host platform.
+        /// </summary>
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        public static extern int Rhost_platform_is_active();
+
+        /// <summary>
+        /// Size of a host window in pixels, and pixels per logical unit.
+        /// </summary>
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void Rhost_window_set_size(uint window, int width, int height, float scale);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void Rhost_inject_mouse_move(uint window, int x, int y, uint modifiers);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void Rhost_inject_mouse_button(uint window, int x, int y, RMouseButton button, int pressed, uint modifiers);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void Rhost_inject_mouse_wheel(uint window, float wheel_x, float wheel_y, uint modifiers);
+
+        /// <summary>
+        /// The pointer left the window: hover states end.
+        /// </summary>
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void Rhost_inject_mouse_leave(uint window);
+
+        /// <summary>
+        /// repeat R_TRUE for a key held down (auto-repeat).
+        /// </summary>
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void Rhost_inject_key(uint window, RKey key, int pressed, uint modifiers, int repeat);
+
+        /// <summary>
+        /// One typed Unicode code point.
+        /// </summary>
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void Rhost_inject_text(uint window, uint codepoint);
+
+        /// <summary>
+        /// The window gained or lost the keyboard. Losing it closes popups and drops captures.
+        /// </summary>
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void Rhost_inject_focus(uint window, int focused);
+
+        /// <summary>
+        /// The user asked to close the window (its close callback decides).
+        /// </summary>
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void Rhost_inject_close(uint window);
     }
 }

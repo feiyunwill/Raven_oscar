@@ -45,6 +45,7 @@ raven_add_test(test_themes)
 raven_add_test(test_markdown)
 raven_add_test(test_tools)
 raven_add_test(test_locale)
+raven_add_test(test_host_platform)
 
 # an interface in XMLC (XML + C), compiled by ravenc
 add_executable(test_xmlc test_xmlc.xmlc test.h)

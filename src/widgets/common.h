@@ -317,6 +317,7 @@ void rvn_textedit_mouse_down(rvn_textedit_t* edit, const rvn_widget_t* widget, R
 	float x, int clicks, int extend);
 void rvn_textedit_mouse_drag(rvn_textedit_t* edit, const rvn_widget_t* widget, Rid font, float size, float x);
 /** Draws selection, text and caret inside `area` (widget coordinates). */
+void rvn_text_input_rect(const rvn_widget_t* widget, const RPainter* painter, rvn_rect_t caret);
 void rvn_textedit_paint(rvn_textedit_t* edit, const rvn_widget_t* widget, RPainter* painter,
 	rvn_rect_t area, Rid font, float size, rvn_color_t color, int focused);
 

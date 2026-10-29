@@ -481,6 +481,18 @@ extern "C" {
 	RAVEN_API int Rwindow_wants_text_input(Rid window);
 	/** @brief R_TRUE while a menu, list or dialog is open over the window. */
 	RAVEN_API int Rwindow_has_popup(Rid window);
+	/**
+	 * Last painted caret in window pixels (x, y, width, height), including scrolling and scale.
+	 * Call after Rdraw_frame. Independent of the blink phase. Returns R_FALSE and zeros the
+	 * outputs when there is no visible editable caret, the window is inactive, or focus changed
+	 * since painting. Any output pointer may be NULL.
+	 */
+	RAVEN_API int Rwindow_get_text_input_rect(Rid window, int* x, int* y, int* width, int* height);
+	/** @return Number of open in-window popups (menus, combo lists, pickers), bottom to top. */
+	RAVEN_API int Rwindow_get_popup_count(Rid window);
+	/** @return Root widget of popup `index`, whose rect is in window coordinates; R_INVALID_ID out of range. */
+	RAVEN_API Rid Rwindow_get_popup(Rid window, int index);
+
 	/** @brief R_FALSE: Tab no longer moves the keyboard focus (the application uses it as a shortcut). Default R_TRUE. */
 	RAVEN_API void Rwindow_set_tab_navigation(Rid window, int enabled);
 

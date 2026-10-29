@@ -59,5 +59,6 @@
 #include "raven/raven_accessibility.h"
 #include "raven/raven_vulkan.h"
 #include "raven/raven_backend.h"
+#include "raven/raven_host.h"
 
 #endif /* RAVEN_H */

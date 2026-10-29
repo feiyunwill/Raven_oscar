@@ -209,6 +209,11 @@ typedef struct rvn_platform_t {
 const rvn_platform_t* rvn_platform_select(int headless);
 
 const rvn_platform_t* rvn_platform_null(void);
+/** The window system supplied by the application (raven_host.h). Compiled on every OS. */
+const rvn_platform_t* rvn_platform_host(void);
+/** R_TRUE after Rhost_platform_register: rvn_platform_select returns the host platform. */
+int rvn_host_platform_registered(void);
+
 #if defined(RAVEN_PLATFORM_X11)
 const rvn_platform_t* rvn_platform_x11(void);
 #endif

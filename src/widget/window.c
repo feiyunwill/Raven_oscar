@@ -301,6 +301,7 @@ void rvn_window_set_focus(rvn_window_t* window, rvn_widget_t* widget) {
 	REvent event;
 	if (old == widget) return;
 	window->focus = widget;
+	window->text_input_owner = R_INVALID_ID;
 	window->needs_paint = R_TRUE;
 	if (old) {
 		old->flags &= ~RVN_WF_FOCUSED;
@@ -804,6 +805,8 @@ static void rvn_window_paint(rvn_window_t* window, RCapture* capture) {
 	rvn_color_t clear;
 
 	window->needs_paint = R_FALSE;
+	window->text_input_owner = R_INVALID_ID;
+	window->text_input_rect = rvn_box(0.0f, 0.0f, 0.0f, 0.0f);
 	if (!rvn_window_can_paint(window) || (!window->visible && !capture)) return;
 
 	/* never queue more than a couple of frames: this is what paces a busy UI thread */
@@ -2365,12 +2368,42 @@ int Rwindow_has_popup(Rid id) {
 	return window && window->popup_count > 0 ? R_TRUE : R_FALSE;
 }
 
+int Rwindow_get_popup_count(Rid id) {
+	rvn_window_t* window = rvn_window_check(id, "Rwindow_get_popup_count");
+	return window ? (int)window->popup_count : 0;
+}
+
+Rid Rwindow_get_popup(Rid id, int index) {
+	rvn_window_t* window = rvn_window_check(id, "Rwindow_get_popup");
+	if (!window || index < 0 || (uint32_t)index >= window->popup_count || !window->popups[index].root) return R_INVALID_ID;
+	return window->popups[index].root->id;
+}
+
 int Rwindow_wants_text_input(Rid id) {
 	rvn_window_t* window = rvn_window_check(id, "Rwindow_wants_text_input");
 	RWidgetType type;
 	if (!window || !window->focus || (window->focus->flags & RVN_WF_DEAD)) return R_FALSE;
 	type = window->focus->cls->type;
 	return type == R_WIDGET_TEXT_INPUT || type == R_WIDGET_TEXT_EDITOR || type == R_WIDGET_SPIN_BOX ? R_TRUE : R_FALSE;
+}
+
+int Rwindow_get_text_input_rect(Rid id, int* x, int* y, int* width, int* height) {
+	rvn_window_t* window;
+	rvn_box_t box;
+	if (x) *x = 0;
+	if (y) *y = 0;
+	if (width) *width = 0;
+	if (height) *height = 0;
+	window = rvn_window_check(id, "Rwindow_get_text_input_rect");
+	if (!window || !window->active || !window->visible || !window->focus ||
+		!rvn_widget_is_enabled(window->focus) || window->focus->id != window->text_input_owner) return R_FALSE;
+	box = window->text_input_rect;
+	if (rvn_box_empty(box)) return R_FALSE;
+	if (x) *x = (int)floorf(box.x0);
+	if (y) *y = (int)floorf(box.y0);
+	if (width) *width = (int)(ceilf(box.x1) - floorf(box.x0));
+	if (height) *height = (int)(ceilf(box.y1) - floorf(box.y0));
+	return R_TRUE;
 }
 
 /* ---------------------------------------------------------------------------

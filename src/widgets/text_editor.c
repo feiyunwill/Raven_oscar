@@ -1101,8 +1101,10 @@ static void rvn_text_editor_paint(rvn_widget_t* widget, RPainter* painter) {
 		float x = rvn_paint_spring(painter, &ed->caret_x, point.x, R_MOTION_SNAPPY);
 		float caret_y = rvn_paint_spring(painter, &ed->caret_y, point.y, R_MOTION_SNAPPY);
 		int moving = rvn_spring_moving(&ed->caret_x, point.x) || rvn_spring_moving(&ed->caret_y, point.y);
+		rvn_rect_t caret = rvn_rect(m.area.x + x - scroll_x - 1.0f, m.area.y + caret_y - scroll_y + 1.0f, 2.0f, m.line_height - 2.0f);
+		rvn_text_input_rect(widget, painter, caret);
 		if (moving || fmod(rvn_clock_seconds() - ed->blink_start, 1.0) < 0.55) {
-			rvn_paint_box(painter, rvn_rect(m.area.x + x - scroll_x - 1.0f, m.area.y + caret_y - scroll_y + 1.0f, 2.0f, m.line_height - 2.0f),
+			rvn_paint_box(painter, caret,
 				1.0f, rvn_widget_color(widget, R_COLOR_ACCENT_HOVERED), 0.0f, 0);
 		}
 	} else {
