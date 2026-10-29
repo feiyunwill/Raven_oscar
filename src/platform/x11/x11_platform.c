@@ -4,7 +4,8 @@
  * through XWayland). Only libX11 is needed.
  *
  *   - UTF-8 text input through an X input context,
- *   - CLIPBOARD selection (UTF-8),
+ *   - CLIPBOARD selection (UTF-8), large texts in both directions through
+ *     the incremental protocol (INCR),
  *   - scale factor from the Xft.dpi resource,
  *   - child windows for native viewports,
  *   - windows without decoration that the application moves and resizes
@@ -31,6 +32,21 @@
 
 #define RVN_X11_CURSOR_COUNT 10
 #define RVN_X11_CLIPBOARD_TIMEOUT_MS 500
+/* INCR: the longest wait for the next piece of a large paste */
+#define RVN_X11_INCR_TIMEOUT_MS 2000
+/* INCR: largest piece sent at once (also capped by the request size of the server) */
+#define RVN_X11_INCR_CHUNK (256 * 1024)
+#define RVN_X11_INCR_MAX_TRANSFERS 8
+
+/* A large text being sent piece by piece to another application (INCR). */
+typedef struct rvn_x11_transfer_t {
+	Window requestor;
+	Atom property;
+	Atom target;
+	char* data;             /* a copy: the clipboard may change during the transfer */
+	size_t size, offset;
+	int finished;           /* the empty piece that ends the transfer was sent */
+} rvn_x11_transfer_t;
 
 struct rvn_pwindow_t {
 	Window handle;
@@ -74,6 +90,7 @@ static struct {
 	/* never mapped: owns the clipboard selection and receives pasted data */
 	Window helper;
 	char* clipboard;
+	rvn_x11_transfer_t transfers[RVN_X11_INCR_MAX_TRANSFERS];
 	uint8_t keys_down[(R_KEY_COUNT + 7) / 8];
 
 	Atom wm_protocols;
@@ -308,6 +325,7 @@ static void rvn_x11_shutdown(void) {
 		if (g_x11.cursors[i]) XFreeCursor(g_x11.display, g_x11.cursors[i]);
 	}
 	if (g_x11.helper) XDestroyWindow(g_x11.display, g_x11.helper);
+	for (i = 0; i < RVN_X11_INCR_MAX_TRANSFERS; i++) rvn_free(g_x11.transfers[i].data);
 	if (g_x11.input_method) XCloseIM(g_x11.input_method);
 	XCloseDisplay(g_x11.display);
 	if (g_x11.wake_pipe[0] >= 0) close(g_x11.wake_pipe[0]);
@@ -746,6 +764,126 @@ static void rvn_x11_clipboard_set(const char* text) {
 	XFlush(g_x11.display);
 }
 
+/* Largest piece of a property that fits in one request of this server. */
+static size_t rvn_x11_chunk_size(void) {
+	long words = XExtendedMaxRequestSize(g_x11.display);
+	size_t bytes;
+	if (words <= 0) words = XMaxRequestSize(g_x11.display);
+	bytes = (size_t)words * 4u;
+	bytes = bytes > 1024u ? bytes - 1024u : 1024u;      /* (room for the header of the request) */
+	return bytes < RVN_X11_INCR_CHUNK ? bytes : RVN_X11_INCR_CHUNK;
+}
+
+/*
+ * The window of the requestor belongs to another application and may be
+ * destroyed at any time: the requests made on it are trapped so that a
+ * BadWindow does not end the program (the default handler of Xlib exits).
+ */
+static int g_x11_trapped_error;
+static int (*g_x11_previous_handler)(Display*, XErrorEvent*);
+
+static int rvn_x11_trap_handler(Display* display, XErrorEvent* error) {
+	RVN_UNUSED(display);
+	g_x11_trapped_error = error->error_code;
+	return 0;
+}
+
+static void rvn_x11_trap_begin(void) {
+	XSync(g_x11.display, False);
+	g_x11_trapped_error = 0;
+	g_x11_previous_handler = XSetErrorHandler(rvn_x11_trap_handler);
+}
+
+/* R_TRUE when the requests since rvn_x11_trap_begin failed. */
+static int rvn_x11_trap_end(void) {
+	XSync(g_x11.display, False);
+	XSetErrorHandler(g_x11_previous_handler);
+	return g_x11_trapped_error != 0;
+}
+
+static void rvn_x11_transfer_end(rvn_x11_transfer_t* transfer) {
+	if (transfer->requestor != None) {
+		rvn_x11_trap_begin();
+		XSelectInput(g_x11.display, transfer->requestor, NoEventMask);
+		rvn_x11_trap_end();
+	}
+	rvn_free(transfer->data);
+	memset(transfer, 0, sizeof(*transfer));
+}
+
+/*
+ * INCR: the requestor deleted the property, which asks for the next piece.
+ * Returns R_TRUE when the event belonged to a transfer.
+ */
+static int rvn_x11_transfer_continue(const XPropertyEvent* event) {
+	int i;
+	if (event->state != PropertyDelete) return R_FALSE;
+	for (i = 0; i < RVN_X11_INCR_MAX_TRANSFERS; i++) {
+		rvn_x11_transfer_t* transfer = &g_x11.transfers[i];
+		size_t piece;
+		if (!transfer->data || transfer->requestor != event->window || transfer->property != event->atom) continue;
+		if (transfer->finished) {
+			rvn_x11_transfer_end(transfer);
+			return R_TRUE;
+		}
+		piece = transfer->size - transfer->offset;
+		if (piece > rvn_x11_chunk_size()) piece = rvn_x11_chunk_size();
+		/* the last piece is empty: it tells the requestor that the text is complete */
+		rvn_x11_trap_begin();
+		XChangeProperty(g_x11.display, transfer->requestor, transfer->property, transfer->target, 8, PropModeReplace,
+			(const unsigned char*)transfer->data + transfer->offset, (int)piece);
+		if (rvn_x11_trap_end()) {
+			/* the requestor is gone */
+			transfer->requestor = None;
+			rvn_x11_transfer_end(transfer);
+			return R_TRUE;
+		}
+		transfer->offset += piece;
+		if (piece == 0) transfer->finished = R_TRUE;
+		return R_TRUE;
+	}
+	return R_FALSE;
+}
+
+/* INCR: starts sending a text too large for one property. R_FALSE when no transfer can be started. */
+static int rvn_x11_transfer_start(const XSelectionRequestEvent* request, Atom property, const char* text, size_t size) {
+	rvn_x11_transfer_t* transfer = NULL;
+	long announced = (long)size;
+	int i;
+	for (i = 0; i < RVN_X11_INCR_MAX_TRANSFERS && !transfer; i++) {
+		/* a requestor asking again with the same property abandons its previous transfer */
+		if (g_x11.transfers[i].data && g_x11.transfers[i].requestor == request->requestor && g_x11.transfers[i].property == property) {
+			rvn_x11_transfer_end(&g_x11.transfers[i]);
+		}
+		if (!g_x11.transfers[i].data) transfer = &g_x11.transfers[i];
+	}
+	if (!transfer) {
+		/* all taken, most likely by requestors that died: the oldest slot is reused */
+		transfer = &g_x11.transfers[0];
+		rvn_x11_transfer_end(transfer);
+	}
+	transfer->data = (char*)rvn_alloc(size ? size : 1);
+	if (!transfer->data) return R_FALSE;
+	memcpy(transfer->data, text, size);
+	transfer->size = size;
+	transfer->offset = 0;
+	transfer->finished = R_FALSE;
+	transfer->requestor = request->requestor;
+	transfer->property = property;
+	transfer->target = request->target;
+	/* the deletions of the property by the requestor ask for the pieces */
+	rvn_x11_trap_begin();
+	XSelectInput(g_x11.display, request->requestor, PropertyChangeMask);
+	XChangeProperty(g_x11.display, request->requestor, property, g_x11.incr, 32, PropModeReplace,
+		(const unsigned char*)&announced, 1);
+	if (rvn_x11_trap_end()) {
+		transfer->requestor = None;
+		rvn_x11_transfer_end(transfer);
+		return R_FALSE;
+	}
+	return R_TRUE;
+}
+
 /* Another application asks for the text we own. */
 static void rvn_x11_selection_request(const XSelectionRequestEvent* request) {
 	XEvent reply;
@@ -767,8 +905,14 @@ static void rvn_x11_selection_request(const XSelectionRequestEvent* request) {
 		XChangeProperty(g_x11.display, request->requestor, reply.xselection.property, XA_ATOM, 32, PropModeReplace,
 			(const unsigned char*)targets, 3);
 	} else if (request->target == g_x11.utf8_string || request->target == XA_STRING) {
-		XChangeProperty(g_x11.display, request->requestor, reply.xselection.property, request->target, 8, PropModeReplace,
-			(const unsigned char*)text, (int)strlen(text));
+		size_t size = strlen(text);
+		if (size > rvn_x11_chunk_size()) {
+			/* too large for one request: sent in pieces (INCR) */
+			if (!rvn_x11_transfer_start(request, reply.xselection.property, text, size)) reply.xselection.property = None;
+		} else {
+			XChangeProperty(g_x11.display, request->requestor, reply.xselection.property, request->target, 8, PropModeReplace,
+				(const unsigned char*)text, (int)size);
+		}
 	} else {
 		reply.xselection.property = None;
 	}
@@ -776,9 +920,77 @@ static void rvn_x11_selection_request(const XSelectionRequestEvent* request) {
 	XFlush(g_x11.display);
 }
 
+/* Waits for an event of a type on a window, for at most `timeout_ms`. */
+static int rvn_x11_wait_event(Window window, int type, XEvent* event, int timeout_ms) {
+	int waited = 0;
+	while (!XCheckTypedWindowEvent(g_x11.display, window, type, event)) {
+		struct pollfd fd;
+		if (waited >= timeout_ms) return R_FALSE;
+		fd.fd = ConnectionNumber(g_x11.display);
+		fd.events = POLLIN;
+		fd.revents = 0;
+		poll(&fd, 1, 10);
+		waited += 10;
+	}
+	return R_TRUE;
+}
+
+/*
+ * INCR: the owner sends a large text in pieces. Each piece is a new value of
+ * the property, which we delete to ask for the next one; an empty piece ends
+ * the text. Returns the whole text, or NULL if the owner stops answering.
+ */
+static char* rvn_x11_receive_incr(void) {
+	char* text = NULL;
+	size_t size = 0, cap = 0;
+	for (;;) {
+		XEvent event;
+		Atom type = None;
+		int format = 0;
+		unsigned long count = 0, remaining = 0;
+		unsigned char* data = NULL;
+		if (!rvn_x11_wait_event(g_x11.helper, PropertyNotify, &event, RVN_X11_INCR_TIMEOUT_MS)) {
+			rvn_free(text);
+			return NULL;
+		}
+		if (event.xproperty.atom != g_x11.paste_property || event.xproperty.state != PropertyNewValue) continue;
+		if (XGetWindowProperty(g_x11.display, g_x11.helper, g_x11.paste_property, 0, 0x1FFFFFFF, True, AnyPropertyType,
+			&type, &format, &count, &remaining, &data) != Success) {
+			rvn_free(text);
+			return NULL;
+		}
+		/* (a notification queued before the transfer started: the property is not there yet) */
+		if (type == None || type == g_x11.incr) {
+			if (data) XFree(data);
+			continue;
+		}
+		if (format != 8) count = 0;
+		if (count == 0) {
+			if (data) XFree(data);
+			break;
+		}
+		if (size + count + 1 > cap) {
+			size_t new_cap = (size + count + 1) * 2;
+			char* grown = (char*)rvn_realloc(text, new_cap);
+			if (!grown) {
+				XFree(data);
+				rvn_free(text);
+				return NULL;
+			}
+			text = grown;
+			cap = new_cap;
+		}
+		memcpy(text + size, data, count);
+		size += count;
+		XFree(data);
+	}
+	if (!text) return rvn_strdup("");
+	text[size] = 0;
+	return text;
+}
+
 static char* rvn_x11_clipboard_get(void) {
 	XEvent event;
-	int waited = 0;
 
 	if (XGetSelectionOwner(g_x11.display, g_x11.clipboard_atom) == g_x11.helper) {
 		return rvn_strdup(g_x11.clipboard ? g_x11.clipboard : "");
@@ -787,15 +999,7 @@ static char* rvn_x11_clipboard_get(void) {
 	XFlush(g_x11.display);
 
 	/* the owner answers with a SelectionNotify; give it a moment, not forever */
-	while (!XCheckTypedWindowEvent(g_x11.display, g_x11.helper, SelectionNotify, &event)) {
-		struct pollfd fd;
-		if (waited >= RVN_X11_CLIPBOARD_TIMEOUT_MS) return NULL;
-		fd.fd = ConnectionNumber(g_x11.display);
-		fd.events = POLLIN;
-		fd.revents = 0;
-		poll(&fd, 1, 10);
-		waited += 10;
-	}
+	if (!rvn_x11_wait_event(g_x11.helper, SelectionNotify, &event, RVN_X11_CLIPBOARD_TIMEOUT_MS)) return NULL;
 	if (event.xselection.property == None) return NULL;
 	{
 		Atom type = None;
@@ -805,8 +1009,12 @@ static char* rvn_x11_clipboard_get(void) {
 		char* result = NULL;
 		XGetWindowProperty(g_x11.display, g_x11.helper, g_x11.paste_property, 0, 0x1FFFFFFF, True, AnyPropertyType,
 			&type, &format, &count, &remaining, &data);
-		/* very large texts use the incremental protocol, which is not supported */
-		if (data && type != g_x11.incr && format == 8) result = rvn_strndup((const char*)data, (size_t)count);
+		if (data && type == g_x11.incr) {
+			/* a large text: deleting the property (above) asked for its first piece */
+			XFree(data);
+			return rvn_x11_receive_incr();
+		}
+		if (data && format == 8) result = rvn_strndup((const char*)data, (size_t)count);
 		if (data) XFree(data);
 		return result;
 	}
@@ -1117,6 +1325,8 @@ static void rvn_x11_process(XEvent* xevent) {
 		rvn_x11_selection_request(&xevent->xselectionrequest);
 		return;
 	}
+	/* (on the window of another application: a large text we are sending) */
+	if (xevent->type == PropertyNotify && rvn_x11_transfer_continue(&xevent->xproperty)) return;
 	if (xevent->type == MappingNotify) {
 		XRefreshKeyboardMapping(&xevent->xmapping);
 		return;
