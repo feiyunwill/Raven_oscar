@@ -385,7 +385,7 @@ Questions: oscarsoirey.contact@gmail.com.
 
 ## Status
 
-Version 0.1. Everything in this README has been tested: the headless test
+Version 0.1.3. Everything in this README has been tested: the headless test
 programs (layout, widgets, XML, threads, memory, animations, text editor,
 shell, dialogs, themes, Markdown, tools, locales and accessibility, clean
 under AddressSanitizer, UBSan and ThreadSanitizer), the renderer and glass on
@@ -706,8 +706,13 @@ onto another tab bar, onto a side of a panel or onto an edge of the area; the
 panels fly to their new place. `Slot.Dock`, `Slot.DockTo` and `Slot.DockSize`
 give the starting arrangement in XML; `Rdock_area_add_panel` adds panels from
 C, and `Rdock_area_save_layout` / `Rdock_area_load_layout` turn the
-arrangement into a short text and back. Panels stay inside their window:
-tearing one off into a window of its own is not implemented.
+arrangement into a short text and back.
+
+**Tearing.** A tab dragged out of the area takes its panel to a window of its
+own; dragged back over a dock area, it docks there again. A double click on
+the tab, or closing the window, puts the panel back where it was.
+`Rdock_area_set_tearable` (or `Tearable="false"` in XML) keeps the panels
+inside their window.
 
 ### Dialogs and files
 
@@ -1132,7 +1137,6 @@ What Raven does not do yet, by area. Contributions are welcome.
   language server client.
 
 **Windows and docking**
-- Tearing a docked panel off into its own window.
 - Dragging from a Raven window to another application.
 - Glass over a native child window.
 
