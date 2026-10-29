@@ -383,7 +383,7 @@ light it catches) and shadow (the one it drops).</td></tr><tr id="R_METRIC_GLASS
 <h2 id="raven_resources_h">raven_resources.h</h2>
 <p><i>Fonts and textures.</i></p>
 <div class="d" id="RFontStyle"><pre class="sig">typedef enum RFontStyle</pre><p>The styles of a font (<a href="#Rfont_get_variant">Rfont_get_variant</a>).</p><table class="v"><tr id="R_FONT_REGULAR"><td><code>R_FONT_REGULAR</code></td><td></td></tr><tr id="R_FONT_BOLD"><td><code>R_FONT_BOLD</code></td><td></td></tr><tr id="R_FONT_ITALIC"><td><code>R_FONT_ITALIC</code></td><td></td></tr><tr id="R_FONT_BOLD_ITALIC"><td><code>R_FONT_BOLD_ITALIC</code></td><td></td></tr></table></div>
-<div class="d" id="RFilterType"><pre class="sig">typedef enum RFilterType</pre><table class="v"><tr id="R_FILTER_LINEAR"><td><code>R_FILTER_LINEAR</code></td><td></td></tr><tr id="R_FILTER_NEAREST"><td><code>R_FILTER_NEAREST</code></td><td>No smoothing: keeps pixel art sharp.</td></tr></table></div>
+<div class="d" id="RFilterType"><pre class="sig">typedef enum RFilterType</pre><table class="v"><tr id="R_FILTER_LINEAR"><td><code>R_FILTER_LINEAR</code></td><td></td></tr><tr id="R_FILTER_NEAREST"><td><code>R_FILTER_NEAREST</code></td><td>No smoothing: keeps pixel art sharp.</td></tr><tr id="R_FILTER_MIPMAP"><td><code>R_FILTER_MIPMAP</code></td><td>Smooth, with mipmaps: an image shown much smaller than its size stays clean instead of shimmering, for a third more GPU memory. The default of the textures made from image files (Rtexture_create...). Backends without mipmaps treat it as R_FILTER_LINEAR.</td></tr></table></div>
 <h3 id="raven_resources_h-fonts">Fonts</h3>
 <div class="d" id="Rfont_create"><pre class="sig"><a href="#Rid">Rid</a> Rfont_create(const char* data, size_t data_size);</pre><p>Creates a font from the content of a .ttf / .otf file. The buffer is copied. Glyphs are rasterized on demand, at the exact pixel size needed by each window scale, into a shared atlas.</p>
 <dl><dt>returns</dt><dd><a href="#R_INVALID_ID">R_INVALID_ID</a> on failure.</dd></dl></div>
@@ -415,7 +415,7 @@ light it catches) and shadow (the one it drops).</td></tr><tr id="R_METRIC_GLASS
 <div class="d" id="Rtexture_destroy"><pre class="sig">void Rtexture_destroy(<a href="#Rid">Rid</a> texture);</pre></div>
 <div class="d" id="Rtexture_is_valid"><pre class="sig">int Rtexture_is_valid(<a href="#Rid">Rid</a> texture);</pre></div>
 <div class="d" id="Rtexture_get_size"><pre class="sig">void Rtexture_get_size(<a href="#Rid">Rid</a> texture, int* width, int* height);</pre></div>
-<div class="d" id="Rtexture_set_filter"><pre class="sig">void Rtexture_set_filter(<a href="#Rid">Rid</a> texture, <a href="#RFilterType">RFilterType</a> filter);</pre></div>
+<div class="d" id="Rtexture_set_filter"><pre class="sig">void Rtexture_set_filter(<a href="#Rid">Rid</a> texture, <a href="#RFilterType">RFilterType</a> filter);</pre><p>How the texture is smoothed when it is scaled. The textures made from image files start with R_FILTER_MIPMAP, the others with R_FILTER_LINEAR.</p></div>
 <h2 id="raven_widget_h">raven_widget.h</h2>
 <p><i>Widget tree, slots and properties shared by every widget.</i></p>
 <p>The layout model follows Unreal's Slate: - a widget computes a desired size from its content (bottom-up pass), - a panel then arranges its children inside the space it received</p>

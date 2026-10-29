@@ -581,6 +581,13 @@ namespace Raven
         /// No smoothing: keeps pixel art sharp.
         /// </summary>
         R_FILTER_NEAREST = 0x02C1,
+        /// <summary>
+        /// Smooth, with mipmaps: an image shown much smaller than its size stays
+        /// clean instead of shimmering, for a third more GPU memory. The default
+        /// of the textures made from image files (Rtexture_create...). Backends
+        /// without mipmaps treat it as R_FILTER_LINEAR.
+        /// </summary>
+        R_FILTER_MIPMAP = 0x02C2,
     }
 
     public enum RWidgetType : int
@@ -3264,7 +3271,7 @@ namespace Raven
         public static extern uint Rtexture_create_from_file_async([MarshalAs(UnmanagedType.LPUTF8Str)] string path);
 
         /// <summary>
-        /// Creates a texture from tightly packed RGBA8 pixels (straight alpha).
+        /// Creates a texture from tightly packed RGBA8 pixels (straight alpha). Its filter is R_FILTER_LINEAR.
         /// </summary>
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         public static extern uint Rtexture_create_from_pixels(byte[] rgba, int width, int height);
@@ -3314,6 +3321,11 @@ namespace Raven
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         public static extern void Rtexture_get_size(uint texture, out int width, out int height);
 
+        /// <summary>
+        /// How the texture is smoothed when it is scaled. The textures made
+        /// from image files start with R_FILTER_MIPMAP, the others with
+        /// R_FILTER_LINEAR.
+        /// </summary>
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         public static extern void Rtexture_set_filter(uint texture, RFilterType filter);
 

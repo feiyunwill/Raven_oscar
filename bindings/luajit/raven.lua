@@ -320,6 +320,7 @@ typedef enum RFontStyle {
 typedef enum RFilterType {
 	R_FILTER_LINEAR = 704,
 	R_FILTER_NEAREST = 705,
+	R_FILTER_MIPMAP = 706,
 } RFilterType;
 typedef enum RWidgetType {
 	R_WIDGET_VBOX = 512,

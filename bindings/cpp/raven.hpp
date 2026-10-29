@@ -1920,7 +1920,7 @@ public:
 	/// Reads and decodes the file on a worker thread.
 	static Texture create_from_file_async(const char* path) { return Texture(Rtexture_create_from_file_async(path)); }
 
-	/// Creates a texture from tightly packed RGBA8 pixels (straight alpha).
+	/// Creates a texture from tightly packed RGBA8 pixels (straight alpha). Its filter is R_FILTER_LINEAR.
 	static Texture create_from_pixels(const uint8_t* rgba, int width, int height) { return Texture(Rtexture_create_from_pixels(rgba, width, height)); }
 
 	/// Replaces the pixels of a texture. The size may change. Use it to
@@ -1939,6 +1939,9 @@ public:
 
 	void get_size(int* width, int* height) const { Rtexture_get_size(id_, width, height); }
 
+	/// How the texture is smoothed when it is scaled. The textures made
+	/// from image files start with R_FILTER_MIPMAP, the others with
+	/// R_FILTER_LINEAR.
 	void set_filter(RFilterType filter) const { Rtexture_set_filter(id_, filter); }
 };
 

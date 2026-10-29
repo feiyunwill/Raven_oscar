@@ -180,6 +180,79 @@ static void test_textures(void) {
 	Rwindow_destroy(window);
 }
 
+/* Pixels of a square of the capture far from mid-gray: what shimmers when an image is scaled down. */
+static int count_far_from_gray(float x0, float y0, float size) {
+	int far = 0;
+	float x, y;
+	for (y = y0 + 2.0f; y < y0 + size - 2.0f; y += 1.0f) {
+		for (x = x0 + 2.0f; x < x0 + size - 2.0f; x += 1.0f) {
+			const uint8_t* p = pixel_at(x, y);
+			if (abs((int)p[0] - 128) > 40) far++;
+		}
+	}
+	return far;
+}
+
+static void test_mipmaps(void) {
+	/* stripes one texel wide, shown about seven times smaller */
+	const int size = 256;
+	uint8_t* stripes = (uint8_t*)malloc((size_t)size * (size_t)size * 4);
+	Rid window = window_from(
+		"<Window Width=\"200\" Height=\"100\" ClearColor=\"#000000\">"
+		"  <Canvas><Image Name=\"image\" Slot.Position=\"20,20\" Slot.Size=\"37,37\"/></Canvas>"
+		"</Window>");
+	Rid image = Rwidget_find(window, "image");
+	Rid texture;
+	int i, far_linear, far_mipmap;
+	for (i = 0; i < size * size; i++) {
+		uint8_t v = (i % size) % 2 ? 255 : 0;
+		stripes[i * 4 + 0] = stripes[i * 4 + 1] = stripes[i * 4 + 2] = v;
+		stripes[i * 4 + 3] = 255;
+	}
+	texture = Rtexture_create_from_pixels(stripes, size, size);
+	Rimage_set_texture(image, texture);
+	Rimage_set_stretch(image, R_STRETCH_FILL);
+
+	/* without mipmaps: one sample of the stripes per pixel, black or white by chance */
+	capture(window);
+	far_linear = count_far_from_gray(20.0f, 20.0f, 37.0f);
+	CHECK(far_linear > 100);
+
+	/* the switch adds the mip levels on the GPU: the stripes average to gray */
+	Rtexture_set_filter(texture, R_FILTER_MIPMAP);
+	capture(window);
+	far_mipmap = count_far_from_gray(20.0f, 20.0f, 37.0f);
+	CHECK(far_mipmap == 0);
+	if (far_mipmap != 0) printf("  far from gray: %d with mipmaps, %d without\n", far_mipmap, far_linear);
+
+	/* new pixels: the levels are made again (white stripes on white: all white) */
+	for (i = 0; i < size * size * 4; i++) stripes[i] = 255;
+	Rtexture_update(texture, stripes, size, size);
+	capture(window);
+	CHECK_PIXEL(38, 38, 255, 255, 255);
+	Rtexture_destroy(texture);
+
+	/* created with mipmaps from the start (as the textures from image files are) */
+	for (i = 0; i < size * size; i++) {
+		uint8_t v = (i % size) % 2 ? 255 : 0;
+		stripes[i * 4 + 0] = stripes[i * 4 + 1] = stripes[i * 4 + 2] = v;
+	}
+	texture = Rtexture_create_from_pixels(stripes, size, size);
+	Rtexture_set_filter(texture, R_FILTER_MIPMAP);
+	Rtexture_update(texture, stripes, size, size);
+	Rimage_set_texture(image, texture);
+	capture(window);
+	CHECK(count_far_from_gray(20.0f, 20.0f, 37.0f) == 0);
+	/* back to plain smoothing: the first level only */
+	Rtexture_set_filter(texture, R_FILTER_LINEAR);
+	capture(window);
+	CHECK(count_far_from_gray(20.0f, 20.0f, 37.0f) > 100);
+
+	Rtexture_destroy(texture);
+	free(stripes);
+	Rwindow_destroy(window);
+}
+
 static void test_text(void) {
 	Rid window = window_from(
 		"<Window Width=\"300\" Height=\"120\" ClearColor=\"#000000\">"
@@ -741,6 +814,7 @@ int main(void) {
 	RUN(test_shapes);
 	RUN(test_clipping);
 	RUN(test_textures);
+	RUN(test_mipmaps);
 	RUN(test_text);
 	RUN(test_custom_drawing);
 	RUN(test_glass);

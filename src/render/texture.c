@@ -26,6 +26,15 @@ rvn_texture_t* rvn_texture_register(void) {
 	return texture;
 }
 
+/*
+ * The filter given to the backend: a backend supplied by the application was
+ * written for the filters it knew, and R_FILTER_MIPMAP came later.
+ */
+static RFilterType rvn_texture_backend_filter(RFilterType filter) {
+	if (filter == R_FILTER_MIPMAP && g_rvn.backend == R_BACKEND_CUSTOM) return R_FILTER_LINEAR;
+	return filter;
+}
+
 /* Sends the pixels to the renderer. Takes ownership of `pixels`. */
 static void rvn_texture_upload(rvn_texture_t* texture, int width, int height, void* pixels) {
 	RTextureDesc desc;
@@ -35,7 +44,7 @@ static void rvn_texture_upload(rvn_texture_t* texture, int width, int height, vo
 	desc.width = (Ruint)width;
 	desc.height = (Ruint)height;
 	desc.format = texture->format;
-	desc.filter = texture->filter;
+	desc.filter = rvn_texture_backend_filter(texture->filter);
 	rvn_renderer_create_texture(texture->id, &desc, pixels);
 	texture->created = R_TRUE;
 	rvn_atomic_store(&texture->ready, 1);
@@ -124,6 +133,8 @@ static Rid rvn_texture_create_async(const char* data, size_t size, const char* p
 	rvn_texture_t* texture = rvn_texture_register();
 	rvn_texture_job_t* job;
 	if (!texture) return R_INVALID_ID;
+	/* a picture from a file: it may well be shown smaller than it is */
+	texture->filter = R_FILTER_MIPMAP;
 	job = (rvn_texture_job_t*)rvn_calloc(sizeof(rvn_texture_job_t));
 	job->id = texture->id;
 	if (path) {
@@ -150,7 +161,7 @@ Rid Rtexture_create(const char* data, size_t data_size) {
 		rvn_error(R_ERROR_INVALID_FILE_FORMAT, R_SEVERITY_ERROR, "Rtexture_create: cannot decode the image");
 		return R_INVALID_ID;
 	}
-	return rvn_texture_create_raw(width, height, R_TEXTURE_RGBA8, R_FILTER_LINEAR, pixels);
+	return rvn_texture_create_raw(width, height, R_TEXTURE_RGBA8, R_FILTER_MIPMAP, pixels);
 }
 
 Rid Rtexture_create_async(const char* data, size_t data_size) {
@@ -189,7 +200,7 @@ Rid Rtexture_create_from_file(const char* path) {
 		rvn_error(R_ERROR_INVALID_FILE_FORMAT, R_SEVERITY_ERROR, "Rtexture_create_from_file: cannot decode '%s'", path);
 		return R_INVALID_ID;
 	}
-	return rvn_texture_create_raw(width, height, R_TEXTURE_RGBA8, R_FILTER_LINEAR, pixels);
+	return rvn_texture_create_raw(width, height, R_TEXTURE_RGBA8, R_FILTER_MIPMAP, pixels);
 }
 
 Rid Rtexture_create_from_file_async(const char* path) {
@@ -299,13 +310,13 @@ void Rtexture_set_filter(Rid id, RFilterType filter) {
 		rvn_error(R_ERROR_INVALID_ID, R_SEVERITY_ERROR, "Rtexture_set_filter: invalid texture");
 		return;
 	}
-	if (filter != R_FILTER_LINEAR && filter != R_FILTER_NEAREST) {
+	if (filter != R_FILTER_LINEAR && filter != R_FILTER_NEAREST && filter != R_FILTER_MIPMAP) {
 		rvn_error(R_ERROR_INVALID_ENUM, R_SEVERITY_ERROR, "Rtexture_set_filter: invalid filter");
 		return;
 	}
 	if (texture->filter == filter) return;
 	texture->filter = filter;
-	if (texture->created) rvn_renderer_set_texture_filter(id, filter);
+	if (texture->created) rvn_renderer_set_texture_filter(id, rvn_texture_backend_filter(filter));
 	rvn_repaint_all_windows();
 }
 

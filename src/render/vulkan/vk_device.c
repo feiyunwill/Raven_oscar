@@ -371,6 +371,15 @@ int rvn_vk_device_init(void) {
 	if (!g_vk.external && !(properties.apiVersion >= VK_API_VERSION_1_1 && g_vk.api_version >= VK_API_VERSION_1_1)) {
 		g_vk.can_share = R_FALSE;
 	}
+	{
+		/* mipmaps are made by blitting each level from the one above it */
+		VkFormatProperties format;
+		const VkFormatFeatureFlags needed = VK_FORMAT_FEATURE_BLIT_SRC_BIT | VK_FORMAT_FEATURE_BLIT_DST_BIT |
+			VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT;
+		memset(&format, 0, sizeof(format));
+		rvn_vk.GetPhysicalDeviceFormatProperties(g_vk.physical_device, VK_FORMAT_R8G8B8A8_UNORM, &format);
+		g_vk.can_mipmap = (format.optimalTilingFeatures & needed) == needed;
+	}
 	return R_TRUE;
 }
 

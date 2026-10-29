@@ -480,6 +480,7 @@ type RFilterType int32
 const (
 	R_FILTER_LINEAR  RFilterType = 0x02C0
 	R_FILTER_NEAREST RFilterType = 0x02C1
+	R_FILTER_MIPMAP  RFilterType = 0x02C2
 )
 
 type RWidgetType int32
@@ -1731,6 +1732,8 @@ func TextureGetSize(texture ID) (width int, height int) {
 	return
 }
 
+// TextureSetFilter: How the texture is smoothed when it is scaled. The textures made from image files start
+// with R_FILTER_MIPMAP, the others with R_FILTER_LINEAR.
 func TextureSetFilter(texture ID, filter RFilterType) {
 	C.Rtexture_set_filter(C.Rid(texture), C.RFilterType(filter))
 }

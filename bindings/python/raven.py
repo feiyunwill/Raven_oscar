@@ -700,9 +700,11 @@ R_FONT_BOLD_ITALIC = RFontStyle.R_FONT_BOLD_ITALIC
 class RFilterType(enum.IntEnum):
     R_FILTER_LINEAR = 0x02C0
     R_FILTER_NEAREST = 0x02C1
+    R_FILTER_MIPMAP = 0x02C2
 
 R_FILTER_LINEAR = RFilterType.R_FILTER_LINEAR
 R_FILTER_NEAREST = RFilterType.R_FILTER_NEAREST
+R_FILTER_MIPMAP = RFilterType.R_FILTER_MIPMAP
 
 class RWidgetType(enum.IntEnum):
     R_WIDGET_VBOX = 0x0200
@@ -3579,7 +3581,7 @@ _lib.Rtexture_create_from_pixels.restype = ctypes.c_uint32
 
 
 def Rtexture_create_from_pixels(rgba, width, height):
-    """Creates a texture from tightly packed RGBA8 pixels (straight alpha)."""
+    """Creates a texture from tightly packed RGBA8 pixels (straight alpha). Its filter is R_FILTER_LINEAR."""
     return _lib.Rtexture_create_from_pixels(rgba, width, height)
 
 
@@ -3670,6 +3672,9 @@ _lib.Rtexture_set_filter.restype = None
 
 
 def Rtexture_set_filter(texture, filter_):
+    """How the texture is smoothed when it is scaled. The textures made
+    from image files start with R_FILTER_MIPMAP, the others with
+    R_FILTER_LINEAR."""
     _lib.Rtexture_set_filter(texture, int(filter_))
 
 

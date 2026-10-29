@@ -32,6 +32,7 @@
 	X(GetPhysicalDeviceProperties) \
 	X(GetPhysicalDeviceQueueFamilyProperties) \
 	X(GetPhysicalDeviceMemoryProperties) \
+	X(GetPhysicalDeviceFormatProperties) \
 	X(EnumerateDeviceExtensionProperties) \
 	X(CreateDevice) \
 	X(GetDeviceProcAddr) \
@@ -107,6 +108,8 @@
 	X(CmdDraw) \
 	X(CmdPipelineBarrier) \
 	X(CmdCopyBufferToImage) \
+	X(CmdBlitImage) \
+	X(CmdCopyImage) \
 	X(CmdCopyImageToBuffer)
 
 /**

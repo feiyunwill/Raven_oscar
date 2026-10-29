@@ -1141,7 +1141,6 @@ What Raven does not do yet, by area. Contributions are welcome.
 - Glass over a native child window.
 
 **Rendering**
-- Mipmaps for scaled-down images.
 - A GPU memory sub-allocator.
 - Presenting several windows in one call.
 - Recovery from a lost Vulkan device.

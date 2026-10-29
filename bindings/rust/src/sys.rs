@@ -408,6 +408,11 @@ pub type RFilterType = c_int;
 pub const R_FILTER_LINEAR: RFilterType = 0x02C0;
 /// No smoothing: keeps pixel art sharp.
 pub const R_FILTER_NEAREST: RFilterType = 0x02C1;
+/// Smooth, with mipmaps: an image shown much smaller than its size stays
+/// clean instead of shimmering, for a third more GPU memory. The default
+/// of the textures made from image files (Rtexture_create...). Backends
+/// without mipmaps treat it as R_FILTER_LINEAR.
+pub const R_FILTER_MIPMAP: RFilterType = 0x02C2;
 
 pub type RWidgetType = c_int;
 /// Stacks children top to bottom. Slate: SVerticalBox.
@@ -1757,7 +1762,7 @@ extern "C" {
     pub fn Rtexture_create_from_file(path: *const c_char) -> Rid;
     /// Reads and decodes the file on a worker thread.
     pub fn Rtexture_create_from_file_async(path: *const c_char) -> Rid;
-    /// Creates a texture from tightly packed RGBA8 pixels (straight alpha).
+    /// Creates a texture from tightly packed RGBA8 pixels (straight alpha). Its filter is R_FILTER_LINEAR.
     pub fn Rtexture_create_from_pixels(rgba: *const u8, width: c_int, height: c_int) -> Rid;
     /// Replaces the pixels of a texture. The size may change. Use it to
     /// show frames produced on the CPU or read back from another renderer.
@@ -1778,6 +1783,9 @@ extern "C" {
     pub fn Rtexture_destroy(texture: Rid);
     pub fn Rtexture_is_valid(texture: Rid) -> c_int;
     pub fn Rtexture_get_size(texture: Rid, width: *mut c_int, height: *mut c_int);
+    /// How the texture is smoothed when it is scaled. The textures made
+    /// from image files start with R_FILTER_MIPMAP, the others with
+    /// R_FILTER_LINEAR.
     pub fn Rtexture_set_filter(texture: Rid, filter: RFilterType);
     /// Creates a widget. It is not shown until it is added to a parent
     /// that belongs to a window (Rwidget_add_child, Rwindow_set_content).

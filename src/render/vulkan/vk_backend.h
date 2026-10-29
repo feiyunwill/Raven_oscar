@@ -66,6 +66,8 @@ typedef struct rvn_vk_texture_t {
 	VkDeviceSize allocation_size;
 	/** R_FALSE until the first pixels are written: the image has no layout yet. */
 	int initialized;
+	/** Mip levels of the image: 1, or a full chain down to 1 x 1 (R_FILTER_MIPMAP). */
+	uint32_t levels;
 } rvn_vk_texture_t;
 
 /**
@@ -186,6 +188,8 @@ typedef struct rvn_vk_state_t {
 	uint32_t api_version;
 	/** Memory of textures can be exported (external memory fd / win32). */
 	int can_share;
+	/** RGBA8 images can be blitted with linear filtering: mipmaps are made on the GPU. */
+	int can_mipmap;
 
 	/* vk_pipeline.c */
 	VkShaderModule vertex_shader;
@@ -194,6 +198,8 @@ typedef struct rvn_vk_state_t {
 	VkPipelineLayout pipeline_layout;
 	VkSampler sampler_linear;
 	VkSampler sampler_nearest;
+	/** Trilinear: for the textures that have mipmaps. */
+	VkSampler sampler_mipmap;
 	rvn_vk_pass_t passes[RVN_VK_MAX_PASSES];
 	uint32_t pass_count;
 	VkDescriptorPool* pools;
