@@ -5347,6 +5347,36 @@ namespace Raven
         public static extern void Rtimeline_set_loop(uint timeline, int loop);
 
         /// <summary>
+        /// Width of the column of the names of the tracks. 0 (default): fits the longest name.
+        /// </summary>
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void Rtimeline_set_header_width(uint timeline, float width);
+
+        /// <summary>
+        /// Returns: The width of the column of the names, as laid out now.
+        /// </summary>
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        public static extern float Rtimeline_get_header_width(uint timeline);
+
+        /// <summary>
+        /// Height of the ruler of time (and of the markers' flags band). 0 (default): automatic.
+        /// </summary>
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void Rtimeline_set_ruler_height(uint timeline, float height);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        public static extern float Rtimeline_get_ruler_height(uint timeline);
+
+        /// <summary>
+        /// Height of the tracks that have none of their own (Rtimeline_set_track_height). 0 (default): automatic.
+        /// </summary>
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void Rtimeline_set_default_track_height(uint timeline, float height);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        public static extern float Rtimeline_get_default_track_height(uint timeline);
+
+        /// <summary>
         /// Returns: The track, or 0. Tracks are shown in the order they were added.
         /// </summary>
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]

@@ -3703,6 +3703,36 @@ func TimelineSetLoop(timeline ID, loop int) {
 	C.Rtimeline_set_loop(C.Rid(timeline), C.int(loop))
 }
 
+// TimelineSetHeaderWidth: Width of the column of the names of the tracks. 0 (default): fits the longest name.
+func TimelineSetHeaderWidth(timeline ID, width float32) {
+	C.Rtimeline_set_header_width(C.Rid(timeline), C.float(width))
+}
+
+// TimelineGetHeaderWidth: Returns: The width of the column of the names, as laid out now.
+func TimelineGetHeaderWidth(timeline ID) float32 {
+	return float32(C.Rtimeline_get_header_width(C.Rid(timeline)))
+}
+
+// TimelineSetRulerHeight: Height of the ruler of time (and of the markers' flags band). 0 (default):
+// automatic.
+func TimelineSetRulerHeight(timeline ID, height float32) {
+	C.Rtimeline_set_ruler_height(C.Rid(timeline), C.float(height))
+}
+
+func TimelineGetRulerHeight(timeline ID) float32 {
+	return float32(C.Rtimeline_get_ruler_height(C.Rid(timeline)))
+}
+
+// TimelineSetDefaultTrackHeight: Height of the tracks that have none of their own
+// (Rtimeline_set_track_height). 0 (default): automatic.
+func TimelineSetDefaultTrackHeight(timeline ID, height float32) {
+	C.Rtimeline_set_default_track_height(C.Rid(timeline), C.float(height))
+}
+
+func TimelineGetDefaultTrackHeight(timeline ID) float32 {
+	return float32(C.Rtimeline_get_default_track_height(C.Rid(timeline)))
+}
+
 // TimelineAddTrack: Returns: The track, or 0. Tracks are shown in the order they were added.
 func TimelineAddTrack(timeline ID, name string) int {
 	name_ := C.CString(name)

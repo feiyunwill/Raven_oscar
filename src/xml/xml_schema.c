@@ -346,7 +346,8 @@ static const rvn_schema_attribute_t g_timeline[] = {
 	B("Loop", "Playing starts again at the end."),
 	B("Playing", "The playhead runs."),
 	N("HeaderWidth", "Width of the names of the tracks; 0 fits the longest."),
-	N("TrackHeight", "Height of a track."),
+	N("TrackHeight", "Height of the tracks that have none of their own; 0 follows the theme."),
+	N("RulerHeight", "Height of the ruler of time; 0 follows the theme."),
 	A("OnChanged", "Action fired when the user moves, stretches or removes something."),
 };
 static const rvn_schema_attribute_t g_block_editor[] = {

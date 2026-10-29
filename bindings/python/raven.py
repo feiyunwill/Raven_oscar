@@ -7300,6 +7300,58 @@ def Rtimeline_set_loop(timeline, loop):
     _lib.Rtimeline_set_loop(timeline, loop)
 
 
+_lib.Rtimeline_set_header_width.argtypes = [ctypes.c_uint32, ctypes.c_float]
+_lib.Rtimeline_set_header_width.restype = None
+
+
+def Rtimeline_set_header_width(timeline, width):
+    """Width of the column of the names of the tracks. 0 (default): fits the longest name."""
+    _lib.Rtimeline_set_header_width(timeline, width)
+
+
+_lib.Rtimeline_get_header_width.argtypes = [ctypes.c_uint32]
+_lib.Rtimeline_get_header_width.restype = ctypes.c_float
+
+
+def Rtimeline_get_header_width(timeline):
+    """Returns: The width of the column of the names, as laid out now."""
+    return _lib.Rtimeline_get_header_width(timeline)
+
+
+_lib.Rtimeline_set_ruler_height.argtypes = [ctypes.c_uint32, ctypes.c_float]
+_lib.Rtimeline_set_ruler_height.restype = None
+
+
+def Rtimeline_set_ruler_height(timeline, height):
+    """Height of the ruler of time (and of the markers' flags band). 0 (default): automatic."""
+    _lib.Rtimeline_set_ruler_height(timeline, height)
+
+
+_lib.Rtimeline_get_ruler_height.argtypes = [ctypes.c_uint32]
+_lib.Rtimeline_get_ruler_height.restype = ctypes.c_float
+
+
+def Rtimeline_get_ruler_height(timeline):
+    return _lib.Rtimeline_get_ruler_height(timeline)
+
+
+_lib.Rtimeline_set_default_track_height.argtypes = [ctypes.c_uint32, ctypes.c_float]
+_lib.Rtimeline_set_default_track_height.restype = None
+
+
+def Rtimeline_set_default_track_height(timeline, height):
+    """Height of the tracks that have none of their own (Rtimeline_set_track_height). 0 (default): automatic."""
+    _lib.Rtimeline_set_default_track_height(timeline, height)
+
+
+_lib.Rtimeline_get_default_track_height.argtypes = [ctypes.c_uint32]
+_lib.Rtimeline_get_default_track_height.restype = ctypes.c_float
+
+
+def Rtimeline_get_default_track_height(timeline):
+    return _lib.Rtimeline_get_default_track_height(timeline)
+
+
 _lib.Rtimeline_add_track.argtypes = [ctypes.c_uint32, ctypes.c_char_p]
 _lib.Rtimeline_add_track.restype = ctypes.c_int
 

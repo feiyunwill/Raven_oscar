@@ -2536,6 +2536,16 @@ pub extern fn Rtimeline_get_view(timeline: Rid, start: ?*f64, end: ?*f64) void;
 pub extern fn Rtimeline_set_playing(timeline: Rid, playing: c_int) void;
 pub extern fn Rtimeline_is_playing(timeline: Rid) c_int;
 pub extern fn Rtimeline_set_loop(timeline: Rid, loop: c_int) void;
+/// Width of the column of the names of the tracks. 0 (default): fits the longest name.
+pub extern fn Rtimeline_set_header_width(timeline: Rid, width: f32) void;
+/// Returns: The width of the column of the names, as laid out now.
+pub extern fn Rtimeline_get_header_width(timeline: Rid) f32;
+/// Height of the ruler of time (and of the markers' flags band). 0 (default): automatic.
+pub extern fn Rtimeline_set_ruler_height(timeline: Rid, height: f32) void;
+pub extern fn Rtimeline_get_ruler_height(timeline: Rid) f32;
+/// Height of the tracks that have none of their own (Rtimeline_set_track_height). 0 (default): automatic.
+pub extern fn Rtimeline_set_default_track_height(timeline: Rid, height: f32) void;
+pub extern fn Rtimeline_get_default_track_height(timeline: Rid) f32;
 /// Returns: The track, or 0. Tracks are shown in the order they were added.
 pub extern fn Rtimeline_add_track(timeline: Rid, name: ?[*:0]const u8) c_int;
 /// Removes a track and everything on it.

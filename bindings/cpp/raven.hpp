@@ -2688,6 +2688,22 @@ inline int timeline_is_playing(Rid timeline) { return Rtimeline_is_playing(timel
 
 inline void timeline_set_loop(Rid timeline, int loop) { Rtimeline_set_loop(timeline, loop); }
 
+/// Width of the column of the names of the tracks. 0 (default): fits the longest name.
+inline void timeline_set_header_width(Rid timeline, float width) { Rtimeline_set_header_width(timeline, width); }
+
+/// Returns: The width of the column of the names, as laid out now.
+inline float timeline_get_header_width(Rid timeline) { return Rtimeline_get_header_width(timeline); }
+
+/// Height of the ruler of time (and of the markers' flags band). 0 (default): automatic.
+inline void timeline_set_ruler_height(Rid timeline, float height) { Rtimeline_set_ruler_height(timeline, height); }
+
+inline float timeline_get_ruler_height(Rid timeline) { return Rtimeline_get_ruler_height(timeline); }
+
+/// Height of the tracks that have none of their own (Rtimeline_set_track_height). 0 (default): automatic.
+inline void timeline_set_default_track_height(Rid timeline, float height) { Rtimeline_set_default_track_height(timeline, height); }
+
+inline float timeline_get_default_track_height(Rid timeline) { return Rtimeline_get_default_track_height(timeline); }
+
 /// Returns: The track, or 0. Tracks are shown in the order they were added.
 inline int timeline_add_track(Rid timeline, const char* name) { return Rtimeline_add_track(timeline, name); }
 
