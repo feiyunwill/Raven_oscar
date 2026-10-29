@@ -1778,6 +1778,14 @@ def _adapt_RTileDragDataCallback(function):
         return ctypes.cast(text, ctypes.c_void_p).value
     return call
 
+RTextEditorZoomCallback = ctypes.CFUNCTYPE(None, ctypes.c_uint32, ctypes.c_float, ctypes.c_void_p)
+
+
+def _adapt_RTextEditorZoomCallback(function):
+    def call(editor, zoom, user_data):
+        function(editor, zoom, user_data)
+    return call
+
 RCompletionCallback = ctypes.CFUNCTYPE(None, ctypes.c_uint32, ctypes.c_char_p, ctypes.c_void_p)
 
 
@@ -6355,6 +6363,44 @@ _lib.Rtext_editor_set_placeholder.restype = None
 def Rtext_editor_set_placeholder(editor, text):
     """Text shown, dimmed, while the editor is empty."""
     _lib.Rtext_editor_set_placeholder(editor, _s(text))
+
+
+_lib.Rtext_editor_set_zoom.argtypes = [ctypes.c_uint32, ctypes.c_float]
+_lib.Rtext_editor_set_zoom.restype = None
+
+
+def Rtext_editor_set_zoom(editor, zoom):
+    """Zoom of the text: a factor of its font size, 1 = 100 % (0.5 .. 4).
+    The user zooms with Ctrl + wheel (around the pointer), Ctrl + '+',
+    Ctrl + '-' and Ctrl + 0 (back to 100 %), keypad included. Set by the
+    program, the top of the view stays and the zoom callback is not called.
+    XML: Zoom="1.25"."""
+    _lib.Rtext_editor_set_zoom(editor, zoom)
+
+
+_lib.Rtext_editor_get_zoom.argtypes = [ctypes.c_uint32]
+_lib.Rtext_editor_get_zoom.restype = ctypes.c_float
+
+
+def Rtext_editor_get_zoom(editor):
+    return _lib.Rtext_editor_get_zoom(editor)
+
+
+_lib.Rtext_editor_set_zoomable.argtypes = [ctypes.c_uint32, ctypes.c_int]
+_lib.Rtext_editor_set_zoomable.restype = None
+
+
+def Rtext_editor_set_zoomable(editor, zoomable):
+    """R_FALSE: Ctrl + wheel and the keys do not zoom (the wheel scrolls). On by default. XML: Zoomable="false"."""
+    _lib.Rtext_editor_set_zoomable(editor, zoomable)
+
+
+_lib.Rtext_editor_set_zoom_callback.argtypes = [ctypes.c_uint32, RTextEditorZoomCallback, ctypes.c_void_p]
+_lib.Rtext_editor_set_zoom_callback.restype = None
+
+
+def Rtext_editor_set_zoom_callback(editor, callback, user_data=None):
+    _lib.Rtext_editor_set_zoom_callback(editor, _callback(RTextEditorZoomCallback, _adapt_RTextEditorZoomCallback, callback), user_data)
 
 
 _lib.Rlanguage_register.argtypes = [ctypes.POINTER(RLanguageDesc)]

@@ -1351,6 +1351,135 @@ static void test_markers_and_brackets(void) {
 	Rwindow_destroy(g_window);
 }
 
+/* a zoom, to the percent */
+#define CHECK_ZOOM(actual, expected) do { \
+	double test_a_ = (double)(actual), test_e_ = (double)(expected); \
+	g_test_checks++; \
+	if (fabs(test_a_ - test_e_) > 0.006) { \
+		g_test_failures++; \
+		printf("  FAIL %s:%d: %s = %g, expected %g\n", __FILE__, __LINE__, #actual, test_a_, test_e_); \
+	} \
+} while (0)
+
+static int g_zooms;
+static float g_zoom_seen;
+
+static void on_zoom(Rid editor, float zoom, void* user_data) {
+	(void)editor;
+	(void)user_data;
+	g_zooms++;
+	g_zoom_seen = zoom;
+}
+
+/* The line under a point of the window: where a click there puts the caret. */
+static int line_at(float x, float y) {
+	int line = -1, column = -1;
+	/* (a click somewhere else first: clicks at the same place would make a double, then a triple click) */
+	test_click_at(g_window, x - 60.0f, y - 60.0f);
+	test_click_at(g_window, x, y);
+	Rdraw_frame();
+	Rtext_editor_get_cursor(g_editor, &line, &column);
+	return line;
+}
+
+static void zoom_wheel(float x, float y, float notches) {
+	/* (a move carries its own modifiers: the pointer goes there first, then Ctrl is held) */
+	Rwindow_inject_mouse_move(g_window, x, y);
+	Rwindow_inject_key(g_window, R_KEY_LEFT_CTRL, R_TRUE, R_MOD_CTRL);
+	Rwindow_inject_mouse_wheel(g_window, 0.0f, notches);
+	Rwindow_inject_key(g_window, R_KEY_LEFT_CTRL, R_FALSE, 0);
+	Rdraw_frame();
+}
+
+static void test_zoom(void) {
+	char text[24000];
+	float x, y, w, h;
+	int i, before, wrapped;
+	for (wrapped = 0; wrapped < 2; wrapped++) {
+		open_editor(wrapped ? "LineNumbers=\"true\" Wrap=\"true\"" : "LineNumbers=\"true\" Language=\"C\"");
+		text[0] = '\0';
+		for (i = 0; i < 300; i++) {
+			char line[80];
+			snprintf(line, sizeof(line), "int value_%d = %d; /* a comment long enough to wrap */\n", i, i);
+			strcat(text, line);
+		}
+		Rtext_editor_set_text(g_editor, text);
+		Rtext_editor_set_zoom_callback(g_editor, on_zoom, NULL);
+		g_zooms = 0;
+		Rdraw_frame();
+		Rwidget_get_rect(g_editor, &x, &y, &w, &h);
+		x += w * 0.4f;
+		y += h * 0.6f;
+		Rtext_editor_scroll_to_line(g_editor, 120);
+		for (i = 0; i < 30; i++) Rdraw_frame();
+		CHECK_ZOOM(Rtext_editor_get_zoom(g_editor), 1.0f);
+
+		/* Ctrl + wheel zooms around the pointer: the line under it stays under it */
+		before = line_at(x, y);
+		zoom_wheel(x, y, 1.0f);
+		CHECK_ZOOM(Rtext_editor_get_zoom(g_editor), 1.1f);
+		CHECK(g_zooms == 1);
+		CHECK_ZOOM(g_zoom_seen, 1.1f);
+		zoom_wheel(x, y, 3.0f);
+		CHECK(line_at(x, y) == before);
+		zoom_wheel(x, y, -6.0f);
+		CHECK(Rtext_editor_get_zoom(g_editor) < 1.0f);
+		CHECK(line_at(x, y) == before);
+		/* it never types nor scrolls */
+		CHECK(g_changes == 0);
+		Rwindow_destroy(g_window);
+	}
+
+	open_editor("");
+	Rtext_editor_set_text(g_editor, "abc");
+	Rtext_editor_set_zoom_callback(g_editor, on_zoom, NULL);
+	g_zooms = 0;
+	Rdraw_frame();
+	Rwidget_get_rect(g_editor, &x, &y, &w, &h);
+	x += 20.0f;
+	y += 20.0f;
+	/* the keys: Ctrl + '=' / keypad '+', Ctrl + '-' / keypad '-', Ctrl + 0; nothing is typed */
+	key(R_KEY_EQUAL, R_MOD_CTRL);
+	CHECK_ZOOM(Rtext_editor_get_zoom(g_editor), 1.1f);
+	key(R_KEY_KP_ADD, R_MOD_CTRL);
+	CHECK_ZOOM(Rtext_editor_get_zoom(g_editor), 1.21f);
+	key(R_KEY_MINUS, R_MOD_CTRL);
+	CHECK_ZOOM(Rtext_editor_get_zoom(g_editor), 1.1f);
+	key(R_KEY_0, R_MOD_CTRL);
+	CHECK_ZOOM(Rtext_editor_get_zoom(g_editor), 1.0f);
+	key(R_KEY_KP_SUBTRACT, R_MOD_CTRL);
+	CHECK(Rtext_editor_get_zoom(g_editor) < 1.0f);
+	CHECK(g_zooms == 5);
+	CHECK_STR(Rtext_editor_get_text(g_editor), "abc");
+	CHECK(g_changes == 0);
+	/* the limits, and back to 100 % near it */
+	zoom_wheel(x, y, 100.0f);
+	CHECK_ZOOM(Rtext_editor_get_zoom(g_editor), 4.0f);
+	zoom_wheel(x, y, -200.0f);
+	CHECK_ZOOM(Rtext_editor_get_zoom(g_editor), 0.5f);
+	Rtext_editor_set_zoom(g_editor, 1.02f);
+	CHECK_ZOOM(Rtext_editor_get_zoom(g_editor), 1.0f);
+	/* set by the program: nobody is told */
+	i = g_zooms;
+	Rtext_editor_set_zoom(g_editor, 2.0f);
+	CHECK_ZOOM(Rtext_editor_get_zoom(g_editor), 2.0f);
+	CHECK(g_zooms == i);
+	/* not zoomable: Ctrl + wheel and the keys leave it */
+	Rtext_editor_set_zoomable(g_editor, R_FALSE);
+	zoom_wheel(x, y, 1.0f);
+	key(R_KEY_0, R_MOD_CTRL);
+	CHECK_ZOOM(Rtext_editor_get_zoom(g_editor), 2.0f);
+	CHECK(g_zooms == i);
+	Rwindow_destroy(g_window);
+
+	/* XML */
+	open_editor("Zoom=\"1.5\" Zoomable=\"false\"");
+	CHECK_ZOOM(Rtext_editor_get_zoom(g_editor), 1.5f);
+	key(R_KEY_0, R_MOD_CTRL);
+	CHECK_ZOOM(Rtext_editor_get_zoom(g_editor), 1.5f);
+	Rwindow_destroy(g_window);
+}
+
 int main(void) {
 	if (!test_init(0)) return 1;
 
@@ -1368,6 +1497,7 @@ int main(void) {
 	RUN(test_assist);
 	RUN(test_completion);
 	RUN(test_markers_and_brackets);
+	RUN(test_zoom);
 
 	Rshutdown();
 	return test_report("test_text_editor");

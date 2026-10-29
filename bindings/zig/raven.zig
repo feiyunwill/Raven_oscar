@@ -929,6 +929,8 @@ pub const RTileContextCallback = ?*const fn (tile_view: Rid, index: c_int, x: f3
 /// (Rtile_view_get_selection). The text returned is copied; NULL keeps
 /// the indices.
 pub const RTileDragDataCallback = ?*const fn (tile_view: Rid, user_data: ?*anyopaque) callconv(.C) ?[*:0]const u8;
+/// Called when the user zoomed (to zoom other editors the same, or to keep it for the next time).
+pub const RTextEditorZoomCallback = ?*const fn (editor: Rid, zoom: f32, user_data: ?*anyopaque) callconv(.C) void;
 /// Called each time the editor gathers its proposals, with the
 /// start of the word being typed: add your own with
 /// Rtext_editor_add_completion (the fields of a structure, the answers of
@@ -2303,6 +2305,16 @@ pub extern fn Rtext_editor_set_syntax(editor: Rid, syntax: RSyntax) void;
 pub extern fn Rtext_editor_set_font(editor: Rid, font: Rid, size: f32) void;
 /// Text shown, dimmed, while the editor is empty.
 pub extern fn Rtext_editor_set_placeholder(editor: Rid, text: ?[*:0]const u8) void;
+/// Zoom of the text: a factor of its font size, 1 = 100 % (0.5 .. 4).
+/// The user zooms with Ctrl + wheel (around the pointer), Ctrl + '+',
+/// Ctrl + '-' and Ctrl + 0 (back to 100 %), keypad included. Set by the
+/// program, the top of the view stays and the zoom callback is not called.
+/// XML: Zoom="1.25".
+pub extern fn Rtext_editor_set_zoom(editor: Rid, zoom: f32) void;
+pub extern fn Rtext_editor_get_zoom(editor: Rid) f32;
+/// R_FALSE: Ctrl + wheel and the keys do not zoom (the wheel scrolls). On by default. XML: Zoomable="false".
+pub extern fn Rtext_editor_set_zoomable(editor: Rid, zoomable: c_int) void;
+pub extern fn Rtext_editor_set_zoom_callback(editor: Rid, callback: RTextEditorZoomCallback, user_data: ?*anyopaque) void;
 /// Declares a language, or replaces the one that has this name: to
 /// add words to a built-in language, read it with Rlanguage_get, change
 /// what you want and register it again. The strings are copied.

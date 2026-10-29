@@ -3,8 +3,10 @@
  * A project is a folder built with the tools of its language: CMake (C, C++),
  * Cargo (Rust), go (Go), dotnet (C#), zig build (Zig), or nothing to build
  * (Python, Lua). The content drawer (Ctrl+Space) shows its files; each opens where it belongs.
- * New project writes one that builds as it is: its interface with its code
- * (main.xmlc, main.xmlrs...), what its tools need, and strings.csv.
+ * New project writes one that builds as it is, of one of two kinds: with a
+ * Raven interface (its interface with its code in main.xmlc, main.xmlrs...,
+ * what its tools need, and strings.csv), or native (what the tools of its
+ * language need and a classic Hello world, nothing of Raven).
  * The settings of the IDE for a project are in its file .raven-ide.
  */
 
@@ -116,6 +118,15 @@ static int interface_can_change(void) {
 
 void designer_open_file(const char* path);
 
+/* The visual editor shows this file now. */
+static int in_visual_editor(const char* path) {
+	return designer_has_document() && designer_get_path() && ide_same_path(designer_get_path(), path);
+}
+
+static int is_interface_file(const char* path) {
+	return ide_interface_language(path) != NULL || ide_iequal(ide_extension(path), "xml");
+}
+
 void ide_open_file(const char* path, int line) {
 	const char* ext = ide_extension(path);
 	if (!ide_file_exists(path)) {
@@ -123,26 +134,57 @@ void ide_open_file(const char* path, int line) {
 		return;
 	}
 	welcome_hide();
-	if (ide_interface_language(path)) {
-		if (!(xmlc_is_open() && ide_same_path(xmlc_path(), path))) {
-			if (!interface_can_change()) return;
-			if (!xmlc_open(path)) return;
-		}
+	if (is_interface_file(path) && in_visual_editor(path)) {
+		/* it is in the preview: there it is edited (an .xmlc is whole in its XML panel, a line of the file is a line of the panel) */
 		Rdock_area_open_panel(g_ide_dock, g_ide_center);
-		/* (the file is whole in the XML panel: a line of the file is a line of the panel) */
 		if (line > 0) designer_go_to_line(line);
-	} else if (ide_iequal(ext, "xml")) {
-		if (!(designer_get_path() && ide_same_path(designer_get_path(), path))) {
-			if (!interface_can_change()) return;
-			if (xmlc_is_open()) xmlc_close();
-			designer_open_file(path);
-		}
-		if (line > 0) designer_go_to_line(line);
+	} else if (is_interface_file(path)) {
+		/* an interface opens as text, like any code: its preview is the island, or the visual editor when asked (ide_preview_file) */
+		editors_open(path, line);
+		island_show_preview();
 	} else if (ide_iequal(ext, "csv") && line <= 0) {
 		strings_open(path);
 	} else {
 		editors_open(path, line);
 	}
+}
+
+void ide_preview_file(const char* path) {
+	Rid editor;
+	char* text = NULL;
+	int modified = R_FALSE, ok;
+	if (!is_interface_file(path)) {
+		ide_open_file(path, 0);
+		return;
+	}
+	if (!ide_file_exists(path)) {
+		ide_status("%s does not exist.", path);
+		return;
+	}
+	welcome_hide();
+	if (!in_visual_editor(path)) {
+		if (!interface_can_change()) return;
+		/* the file leaves its code editor for the visual editor, its unsaved changes with it */
+		editor = editors_find(path);
+		if (editor != R_INVALID_ID) {
+			text = ide_strdup(Rtext_editor_get_text(editor));
+			modified = editors_is_modified(editor);
+			editors_close_file(path);
+		}
+		if (ide_interface_language(path)) {
+			ok = xmlc_open_text(path, text);
+		} else {
+			if (xmlc_is_open()) xmlc_close();
+			if (text) designer_load_interface(text, path, R_FALSE);
+			else designer_open_file(path);
+			ok = designer_has_document();
+		}
+		free(text);
+		if (!ok) return;
+		if (modified) designer_set_modified(R_TRUE);
+	}
+	Rdock_area_open_panel(g_ide_dock, g_ide_center);
+	ide_status("Preview of %s. Close the preview (View > Close the preview) to go back to its code.", ide_basename(path));
 }
 
 /* ---------------------------------------------------------------------------
@@ -495,6 +537,115 @@ static const char SCRIPT_LUA[] =
 "</script>\n"
 "\n";
 
+/* ---------------------------------------------------------------------------
+ *  Native projects: the classic Hello world of each language, built with its
+ *  own tools, and nothing of Raven (no interface file, no strings.csv).
+ * ------------------------------------------------------------------------- */
+
+static const char NATIVE_CMAKE[] =
+"cmake_minimum_required(VERSION 3.16)\n"
+"project({{NAME}} {{CMAKE_LANGUAGE}})\n"
+"\n"
+"add_executable({{NAME}} {{MAIN}})\n"
+"if(MSVC)\n"
+"\ttarget_compile_definitions({{NAME}} PRIVATE _CRT_SECURE_NO_WARNINGS)\n"
+"endif()\n";
+
+static const char NATIVE_C[] =
+"#include <stdio.h>\n"
+"\n"
+"int main(void) {\n"
+"\tprintf(\"Hello, world!\\n\");\n"
+"\treturn 0;\n"
+"}\n";
+
+static const char NATIVE_CPP[] =
+"#include <iostream>\n"
+"\n"
+"int main() {\n"
+"\tstd::cout << \"Hello, world!\" << std::endl;\n"
+"\treturn 0;\n"
+"}\n";
+
+static const char NATIVE_CARGO_TOML[] =
+"[package]\n"
+"name = \"{{NAME}}\"\n"
+"version = \"0.1.0\"\n"
+"edition = \"2021\"\n"
+"\n"
+"[dependencies]\n";
+
+static const char NATIVE_RUST[] =
+"fn main() {\n"
+"    println!(\"Hello, world!\");\n"
+"}\n";
+
+static const char NATIVE_PYTHON[] =
+"def main():\n"
+"    print(\"Hello, world!\")\n"
+"\n"
+"\n"
+"if __name__ == \"__main__\":\n"
+"    main()\n";
+
+static const char NATIVE_GO_MOD[] =
+"module {{NAME}}\n"
+"\n"
+"go 1.18\n";
+
+static const char NATIVE_GO[] =
+"package main\n"
+"\n"
+"import \"fmt\"\n"
+"\n"
+"func main() {\n"
+"\tfmt.Println(\"Hello, world!\")\n"
+"}\n";
+
+static const char NATIVE_CSPROJ[] =
+"<Project Sdk=\"Microsoft.NET.Sdk\">\n"
+"  <PropertyGroup>\n"
+"    <OutputType>Exe</OutputType>\n"
+"    <TargetFramework>net8.0</TargetFramework>\n"
+"    <Nullable>enable</Nullable>\n"
+"    <ImplicitUsings>enable</ImplicitUsings>\n"
+"  </PropertyGroup>\n"
+"</Project>\n";
+
+static const char NATIVE_CSHARP[] =
+"public static class Program\n"
+"{\n"
+"    public static void Main()\n"
+"    {\n"
+"        System.Console.WriteLine(\"Hello, world!\");\n"
+"    }\n"
+"}\n";
+
+static const char NATIVE_BUILD_ZIG[] =
+"const std = @import(\"std\");\n"
+"\n"
+"pub fn build(b: *std.Build) void {\n"
+"    const target = b.standardTargetOptions(.{});\n"
+"    const optimize = b.standardOptimizeOption(.{});\n"
+"    const exe = b.addExecutable(.{\n"
+"        .name = \"{{NAME}}\",\n"
+"        .root_module = b.createModule(.{ .root_source_file = b.path(\"src/main.zig\"), .target = target, .optimize = optimize }),\n"
+"    });\n"
+"    b.installArtifact(exe);\n"
+"    const run = b.addRunArtifact(exe);\n"
+"    b.step(\"run\", \"Run the program\").dependOn(&run.step);\n"
+"}\n";
+
+static const char NATIVE_ZIG[] =
+"const std = @import(\"std\");\n"
+"\n"
+"pub fn main() void {\n"
+"    std.debug.print(\"Hello, world!\\n\", .{});\n"
+"}\n";
+
+static const char NATIVE_LUA[] =
+"print(\"Hello, world!\")\n";
+
 /* "{{NAME}}" and the others, replaced */
 static char* expand(const char* text, const char* name, const char* bindings, const char* extra_key, const char* extra_value) {
 	ide_buffer_t out = { 0 };
@@ -655,6 +806,18 @@ int project_open(const char* folder) {
 			}
 			free(dir);
 		}
+		/* a native project: its program */
+		{
+			static const char* const natives[] = { "main.c", "main.cpp", "src/main.rs", "main.py", "main.go", "Program.cs", "src/main.zig", "main.lua" };
+			for (i = 0; i < (int)(sizeof(natives) / sizeof(natives[0])) && !opened; i++) {
+				char* path = ide_join(g_project_dir, natives[i]);
+				if (ide_file_exists(path)) {
+					ide_open_file(path, 0);
+					opened = 1;
+				}
+				free(path);
+			}
+		}
 	}
 	designer_update_title();
 	ide_status("Project %s opened. F5 builds and runs it.", ide_basename(g_project_dir));
@@ -695,7 +858,56 @@ static int write_expanded(const char* folder, const char* file, const char* text
 	return ok;
 }
 
-int project_create(const char* parent_folder, const char* name, const char* language) {
+/* A native project: the files its tools need and a Hello world, nothing of Raven. */
+static int create_native(const char* folder, const char* name, const char* language) {
+	int ok = R_TRUE;
+	if (ide_iequal(language, "C") || ide_iequal(language, "C++")) {
+		int cpp = ide_iequal(language, "C++");
+		char* cmake = expand(NATIVE_CMAKE, name, "", "{{CMAKE_LANGUAGE}}", cpp ? "CXX" : "C");
+		char* cmake2 = expand(cmake, name, "", "{{MAIN}}", cpp ? "main.cpp" : "main.c");
+		ok = write_new(folder, "CMakeLists.txt", cmake2);
+		free(cmake);
+		free(cmake2);
+		ok = ok && write_new(folder, cpp ? "main.cpp" : "main.c", cpp ? NATIVE_CPP : NATIVE_C);
+		ok = ok && write_new(folder, ".gitignore", "build/\n.raven-ide\n");
+	} else if (ide_iequal(language, "Rust")) {
+		char* src = ide_join(folder, "src");
+		ok = write_expanded(folder, "Cargo.toml", NATIVE_CARGO_TOML, name, "");
+		ok = ok && ide_make_dirs(src);
+		ok = ok && write_new(src, "main.rs", NATIVE_RUST);
+		free(src);
+		ok = ok && write_new(folder, ".gitignore", "target/\n.raven-ide\n");
+	} else if (ide_iequal(language, "Python")) {
+		ok = write_new(folder, "main.py", NATIVE_PYTHON);
+		ok = ok && write_new(folder, ".gitignore", "__pycache__/\n.raven-ide\n");
+	} else if (ide_iequal(language, "Go")) {
+		ok = write_expanded(folder, "go.mod", NATIVE_GO_MOD, name, "");
+		ok = ok && write_new(folder, "main.go", NATIVE_GO);
+		ok = ok && write_new(folder, ".gitignore", ".raven-ide\n");
+	} else if (ide_iequal(language, "C#")) {
+		char csproj[300];
+		snprintf(csproj, sizeof(csproj), "%s.csproj", name);
+		ok = write_new(folder, csproj, NATIVE_CSPROJ);
+		ok = ok && write_new(folder, "Program.cs", NATIVE_CSHARP);
+		ok = ok && write_new(folder, ".gitignore", "bin/\nobj/\n.raven-ide\n");
+	} else if (ide_iequal(language, "Zig")) {
+		char* src = ide_join(folder, "src");
+		ok = write_expanded(folder, "build.zig", NATIVE_BUILD_ZIG, name, "");
+		ok = ok && ide_make_dirs(src);
+		ok = ok && write_new(src, "main.zig", NATIVE_ZIG);
+		free(src);
+		ok = ok && write_new(folder, ".gitignore", "zig-out/\n.zig-cache/\n.raven-ide\n");
+	} else if (ide_iequal(language, "Lua")) {
+		ok = write_new(folder, "main.lua", NATIVE_LUA);
+		ok = ok && write_new(folder, ".gitignore", ".raven-ide\n");
+	} else {
+		ide_status("Unknown language %s", language);
+		ok = R_FALSE;
+	}
+	return ok;
+}
+
+int project_create(const char* parent_folder, const char* name, const char* language, int with_interface) {
 	char* folder;
 	char* bindings;
 	char* text;
@@ -711,9 +923,20 @@ int project_create(const char* parent_folder, const char* name, const char* lang
 		free(folder);
 		return R_FALSE;
 	}
-	bindings = bindings_dir();
 	if (!language || !language[0]) language = "C";
 
+	if (!with_interface) {
+		if (!create_native(folder, name, language)) {
+			ide_status("Cannot write the files of the project in %s", folder);
+			free(folder);
+			return R_FALSE;
+		}
+		ok = project_open(folder);
+		free(folder);
+		return ok;
+	}
+
+	bindings = bindings_dir();
 	if (ide_iequal(language, "C") || ide_iequal(language, "C++")) {
 		int cpp = ide_iequal(language, "C++");
 		char* cmake = expand(TEMPLATE_CMAKE, name, bindings, "{{CMAKE_LANGUAGE}}", cpp ? "CXX" : "C");
@@ -823,16 +1046,18 @@ static const char NEW_PROJECT_XML[] =
 "<Border Padding=\"24\" Width=\"600\">"
 "  <VBox Spacing=\"14\">"
 "    <Label Text=\"New project\" TextSize=\"22\"/>"
-"    <Label Text=\"An interface with its code in one file (main.xmlc, main.xmlrs...), what the tools of its language need, and its translations (strings.csv). It builds as it is.\" Wrap=\"true\" Opacity=\"0.65\"/>"
+"    <Label Name=\"about\" Wrap=\"true\" Opacity=\"0.65\"/>"
 "    <Grid Columns=\"0,1\" Spacing=\"10\">"
 "      <Label Text=\"Name\" Slot.VAlign=\"Center\"/>"
 "      <TextInput Name=\"name\" Slot.Column=\"1\" Placeholder=\"my_app\"/>"
 "      <Label Text=\"Language\" Slot.Row=\"1\" Slot.VAlign=\"Center\"/>"
 "      <ComboBox Name=\"language\" Slot.Row=\"1\" Slot.Column=\"1\" Items=\"C (CMake)|C++ (CMake)|Rust (Cargo)|Python|Go|C# (dotnet)|Zig (zig build)|Lua (LuaJIT)\" Selected=\"0\"/>"
-"      <Label Text=\"Location\" Slot.Row=\"2\" Slot.VAlign=\"Center\"/>"
-"      <HBox Spacing=\"8\" Slot.Row=\"2\" Slot.Column=\"1\"><TextInput Name=\"folder\" Slot.Fill=\"1\"/><Button Name=\"browse\" Text=\"Browse...\"/></HBox>"
-"      <Label Text=\"Raven package\" Slot.Row=\"3\" Slot.VAlign=\"Center\" Tooltip=\"The folder with bin/, include/ and lib/: what the project is built with\"/>"
-"      <HBox Spacing=\"8\" Slot.Row=\"3\" Slot.Column=\"1\"><TextInput Name=\"prefix\" Slot.Fill=\"1\" Placeholder=\"the folder with bin/, include/ and lib/\"/><Button Name=\"browse.prefix\" Text=\"Browse...\"/></HBox>"
+"      <Label Text=\"Kind\" Slot.Row=\"2\" Slot.VAlign=\"Center\" Tooltip=\"With a Raven interface (.xmlc, .xmlrs, .xmlpy...), or the language alone\"/>"
+"      <ComboBox Name=\"kind\" Slot.Row=\"2\" Slot.Column=\"1\" Items=\"Raven interface + code (main.xmlc, main.xmlrs, main.xmlpy...)|Native: the language alone, a classic Hello world\" Selected=\"0\"/>"
+"      <Label Text=\"Location\" Slot.Row=\"3\" Slot.VAlign=\"Center\"/>"
+"      <HBox Spacing=\"8\" Slot.Row=\"3\" Slot.Column=\"1\"><TextInput Name=\"folder\" Slot.Fill=\"1\"/><Button Name=\"browse\" Text=\"Browse...\"/></HBox>"
+"      <Label Name=\"prefix.label\" Text=\"Raven package\" Slot.Row=\"4\" Slot.VAlign=\"Center\" Tooltip=\"The folder with bin/, include/ and lib/: what the project is built with\"/>"
+"      <HBox Name=\"prefix.row\" Spacing=\"8\" Slot.Row=\"4\" Slot.Column=\"1\"><TextInput Name=\"prefix\" Slot.Fill=\"1\" Placeholder=\"the folder with bin/, include/ and lib/\"/><Button Name=\"browse.prefix\" Text=\"Browse...\"/></HBox>"
 "    </Grid>"
 "    <Label Name=\"where\" Opacity=\"0.6\" Wrap=\"true\"/>"
 "    <Label Name=\"error\" Wrap=\"true\" Visibility=\"Collapsed\"/>"
@@ -843,11 +1068,29 @@ static const char NEW_PROJECT_XML[] =
 static const char* const g_languages[] = { "C", "C++", "Rust", "Python", "Go", "C#", "Zig", "Lua" };
 
 static struct {
-	Rid name, language, folder, prefix, where, error;
+	Rid content, name, language, kind, folder, prefix, where, error, about;
 	/* what was read when Create was clicked */
 	char name_text[256], folder_text[1024], prefix_text[1024];
 	int language_index;
+	int native;
 } g_np;
+
+/* The kind chosen: what the project will hold, said above the fields; the Raven package only matters with an interface. */
+static void np_update_kind(void) {
+	int native = Rcombo_box_get_selected(g_np.kind) == 1;
+	Rlabel_set_text(g_np.about, native
+		? "The language alone: what its tools need and a classic Hello world. No interface file and no translations: add them later if you want."
+		: "An interface with its code in one file (main.xmlc, main.xmlrs...), what the tools of its language need, and its translations (strings.csv). It builds as it is.");
+	Rwidget_set_visibility(Rwidget_find(g_np.content, "prefix.label"), native ? R_COLLAPSED : R_VISIBLE);
+	Rwidget_set_visibility(Rwidget_find(g_np.content, "prefix.row"), native ? R_COLLAPSED : R_VISIBLE);
+}
+
+static void np_kind_changed(Rid combo, int index, void* user_data) {
+	(void)combo;
+	(void)index;
+	(void)user_data;
+	np_update_kind();
+}
 
 static void on_dialog_button(Rid button, void* user_data) {
 	Rdialog_close(button, (int)(size_t)user_data);
@@ -930,6 +1173,7 @@ static void on_create(Rid button, void* user_data) {
 	snprintf(g_np.prefix_text, sizeof(g_np.prefix_text), "%s", Rtext_input_get_text(g_np.prefix));
 	language = Rcombo_box_get_selected(g_np.language);
 	g_np.language_index = language >= 0 && language < 8 ? language : 0;
+	g_np.native = Rcombo_box_get_selected(g_np.kind) == 1;
 	if (!valid_name(g_np.name_text)) {
 		np_show_error("The name is made of letters, digits, '_' and '-', and starts with a letter.");
 		return;
@@ -946,7 +1190,7 @@ static void on_create(Rid button, void* user_data) {
 	}
 	free(full);
 	/* the languages built by their own tools need the bindings of the package */
-	if (g_np.language_index >= 2 && g_np.language_index != 3 && g_np.language_index != 7 && g_np.prefix_text[0]) {
+	if (!g_np.native && g_np.language_index >= 2 && g_np.language_index != 3 && g_np.language_index != 7 && g_np.prefix_text[0]) {
 		char* bindings = ide_join(g_np.prefix_text, "share/raven/bindings");
 		int found = ide_is_dir(bindings);
 		free(bindings);
@@ -964,8 +1208,11 @@ void project_new(void) {
 	const char* location;
 	if (content == R_INVALID_ID) return;
 	memset(&g_np, 0, sizeof(g_np));
+	g_np.content = content;
 	g_np.name = Rwidget_find(content, "name");
 	g_np.language = Rwidget_find(content, "language");
+	g_np.kind = Rwidget_find(content, "kind");
+	g_np.about = Rwidget_find(content, "about");
 	g_np.folder = Rwidget_find(content, "folder");
 	g_np.prefix = Rwidget_find(content, "prefix");
 	g_np.where = Rwidget_find(content, "where");
@@ -991,6 +1238,10 @@ void project_new(void) {
 		int last = atoi(prefs_get("projects_language"));
 		Rcombo_box_set_selected(g_np.language, last >= 0 && last < 8 ? last : 0);
 	}
+	/* (the kind of the last project created) */
+	Rcombo_box_set_selected(g_np.kind, !strcmp(prefs_get("projects_native"), "1") ? 1 : 0);
+	Rcombo_box_set_changed_callback(g_np.kind, np_kind_changed, NULL);
+	np_update_kind();
 	Rtext_input_set_changed_callback(g_np.name, np_changed, NULL);
 	Rtext_input_set_changed_callback(g_np.folder, np_changed, NULL);
 	np_update_where();
@@ -1012,11 +1263,12 @@ void project_new(void) {
 		snprintf(index, sizeof(index), "%d", g_np.language_index);
 		prefs_set("projects_language", index);
 	}
-	if (g_np.prefix_text[0]) {
+	prefs_set("projects_native", g_np.native ? "1" : "0");
+	if (!g_np.native && g_np.prefix_text[0]) {
 		snprintf(g_settings.raven_prefix, sizeof(g_settings.raven_prefix), "%s", g_np.prefix_text);
 		prefs_set("raven_prefix", g_np.prefix_text);
 	}
-	if (!project_create(g_np.folder_text, g_np.name_text, g_languages[g_np.language_index])) {
+	if (!project_create(g_np.folder_text, g_np.name_text, g_languages[g_np.language_index], !g_np.native)) {
 		char text[1400];
 		snprintf(text, sizeof(text), "The project %s could not be created in %s. The status bar says why.", g_np.name_text, g_np.folder_text);
 		Rmessage_box(g_ide_window, "New project", text, R_MESSAGE_OK);

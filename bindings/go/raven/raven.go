@@ -3167,6 +3167,23 @@ func TextEditorSetPlaceholder(editor ID, text string) {
 	C.Rtext_editor_set_placeholder(C.Rid(editor), text_)
 }
 
+// TextEditorSetZoom: Zoom of the text: a factor of its font size, 1 = 100 % (0.5 .. 4). The user zooms with
+// Ctrl + wheel (around the pointer), Ctrl + '+', Ctrl + '-' and Ctrl + 0 (back to 100 %), keypad included.
+// Set by the program, the top of the view stays and the zoom callback is not called. XML: Zoom="1.25".
+func TextEditorSetZoom(editor ID, zoom float32) {
+	C.Rtext_editor_set_zoom(C.Rid(editor), C.float(zoom))
+}
+
+func TextEditorGetZoom(editor ID) float32 {
+	return float32(C.Rtext_editor_get_zoom(C.Rid(editor)))
+}
+
+// TextEditorSetZoomable: R_FALSE: Ctrl + wheel and the keys do not zoom (the wheel scrolls). On by default.
+// XML: Zoomable="false".
+func TextEditorSetZoomable(editor ID, zoomable int) {
+	C.Rtext_editor_set_zoomable(C.Rid(editor), C.int(zoomable))
+}
+
 func LanguageGetCount() int {
 	return int(C.Rlanguage_get_count())
 }
@@ -5239,3 +5256,22 @@ func HostInjectClose(window ID) {
 // Rwindow_create_from_compiled, Rwidget_create_from_compiled, Rxml_set_reload_callback, Rxml_register_tag
 // Rxml_document_parse, Rxml_get_attribute_info, Rlocale_set_changed_callback, Rtr_format
 // Raccessibility_get_system_settings, Rhost_platform_register
+// Rtile_view_set_activated_callback, Rtile_view_set_context_callback, Rtext_editor_set_zoom_callback
+// Rlanguage_register, Rlanguage_get, Rtext_editor_set_completion_callback, Rtext_editor_set_changed_callback
+// Rdock_area_set_close_callback, Rdock_area_set_changed_callback, Risland_set_changed_callback
+// Rcolor_picker_set_changed_callback, Rtimeline_set_time_callback, Rtimeline_set_changed_callback
+// Rtimeline_set_selection_callback, Rtimeline_set_activated_callback, Rtimeline_set_removed_callback
+// Rnode_graph_set_node_user_data, Rnode_graph_get_node_user_data, Rnode_graph_set_connect_callback
+// Rnode_graph_set_linked_callback, Rnode_graph_set_unlinked_callback, Rnode_graph_set_moved_callback
+// Rnode_graph_set_selection_callback, Rnode_graph_set_removed_callback, Rnode_graph_set_activated_callback
+// Rnode_graph_set_context_callback, Rblock_editor_set_changed_callback, Rblock_editor_set_clicked_callback
+// Rblock_editor_set_context_callback, Rdialog_open, Rfile_dialog_open, Rfile_dialog_save
+// Rfile_dialog_select_folder, Rfile_read, Rfile_browser_set_filters, Rfile_browser_set_accepted_callback
+// Rfile_browser_set_cancelled_callback, Rfile_browser_set_selection_changed_callback
+// Rviewport_set_draw_callback, Rviewport_get_native_handle, Rviewport_set_resize_callback
+// Rcustom_set_paint_callback, Rcustom_set_measure_callback, Rdraw_rect, Rdraw_rect_outline, Rdraw_circle
+// Rdraw_line, Rdraw_curve, Rdraw_triangle, Rdraw_image, Rdraw_text, Rdraw_glass, Rdraw_spring, Rspring_kick
+// Rspring_set, Rdraw_push_clip_rect, Rdraw_pop_clip_rect, Reffect_get_defaults, Rshader_look_init
+// Rshader_look_defaults, Rdraw_shader, Rborder_set_effect, Rwindow_create_from_compiled
+// Rwidget_create_from_compiled, Rxml_set_reload_callback, Rxml_register_tag, Rxml_document_parse
+// Rxml_get_attribute_info, Rlocale_set_changed_callback, Rtr_format, Raccessibility_get_system_settings

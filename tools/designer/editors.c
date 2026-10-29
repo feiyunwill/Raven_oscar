@@ -1,7 +1,8 @@
 /**
  * Raven Designer - editors.c
- * Code editors in tabs next to the preview: any text file of the project,
- * and the <script> blocks of an .xmlc. Completion of the Raven API, of the
+ * Code editors in tabs: any text file of the project, the interfaces
+ * (.xml, .xmlc...) included, whose preview is the island (island.c) until
+ * the visual editor is asked for; and the <script> blocks of an .xmlc. Completion of the Raven API, of the
  * widgets of the interface (ui.name), of tags, attributes and @keys.
  */
 
@@ -22,6 +23,8 @@ typedef struct editor_t {
 	char* key;       /* what finds it again: the path, or "file.xmlc#script1" */
 	char* title;
 	int modified;
+	/* counts the changes of its text (the island rebuilds its preview when it moves) */
+	unsigned revision;
 	ide_save_callback save;
 	void* user;
 } editor_t;
@@ -35,6 +38,8 @@ static struct {
 	char** api_detail;
 	int api_count;
 	int api_loaded;
+	/* the code editor the keyboard was in last */
+	Rid last;
 } g_e;
 
 /* ---------------------------------------------------------------------------
@@ -61,7 +66,9 @@ void editors_set_modified(Rid widget, int modified) {
 }
 
 static void on_changed(Rid widget, void* user_data) {
+	editor_t* e = by_widget(widget);
 	(void)user_data;
+	if (e) e->revision++;
 	if (!g_e.loading) editors_set_modified(widget, R_TRUE);
 }
 
@@ -108,8 +115,53 @@ static int on_close(Rid area, Rid panel, void* user_data) {
 	return R_TRUE;
 }
 
+/*
+ * Where the code editors go: in the tabs of the one shown last, else in those
+ * of the preview, else (the preview is hidden: no interface in the visual
+ * editor) above the Output.
+ */
+Rid editors_anchor(void) {
+	int i;
+	editors_forget_closed();
+	if (g_e.last != R_INVALID_ID && Rwidget_is_valid(g_e.last) && by_widget(g_e.last) && Rdock_area_is_panel_open(g_ide_dock, g_e.last)) return g_e.last;
+	for (i = g_e.count - 1; i >= 0; i--) {
+		if (Rdock_area_is_panel_open(g_ide_dock, g_e.list[i].widget)) return g_e.list[i].widget;
+	}
+	if (g_ide_center != R_INVALID_ID && Rdock_area_is_panel_open(g_ide_dock, g_ide_center)) return g_ide_center;
+	return R_INVALID_ID;
+}
+
+static void dock_editor(Rid widget, const char* title, Rid anchor) {
+	if (anchor != R_INVALID_ID) Rdock_area_add_panel(g_ide_dock, widget, title, R_DOCK_TAB, anchor, 0.0f);
+	else Rdock_area_add_panel(g_ide_dock, widget, title, R_DOCK_TOP, Rwidget_find(g_ide_window, "output"), 0.7f);
+}
+
+void editors_regroup(void) {
+	Rid anchor = g_ide_center != R_INVALID_ID && Rdock_area_is_panel_open(g_ide_dock, g_ide_center) ? g_ide_center : R_INVALID_ID;
+	int i;
+	editors_forget_closed();
+	for (i = 0; i < g_e.count; i++) {
+		Rid widget = g_e.list[i].widget;
+		if (!Rdock_area_is_panel_open(g_ide_dock, widget)) continue;
+		if (anchor == R_INVALID_ID) {
+			Rdock_area_move_panel(g_ide_dock, widget, R_DOCK_TOP, Rwidget_find(g_ide_window, "output"), 0.7f);
+			anchor = widget;
+		} else {
+			Rdock_area_move_panel(g_ide_dock, widget, R_DOCK_TAB, anchor, 0.0f);
+		}
+	}
+	if (g_e.last != R_INVALID_ID && by_widget(g_e.last) && Rdock_area_is_panel_open(g_ide_dock, g_e.last)) Rdock_area_show_panel(g_ide_dock, g_e.last);
+}
+
+/* An interface (.xml, .xmlc...): XML, its scripts colored in their language, and the completion of tags and attributes. */
+static int is_interface(const char* path) {
+	return path && (ide_interface_language(path) || ide_iequal(ide_extension(path), "xml"));
+}
+
 static editor_t* create(const char* title, const char* key, const char* path, const char* text, const char* language) {
 	editor_t* e;
+	/* (where it goes, before it is one of the editors) */
+	Rid anchor = editors_anchor();
 	Rid widget = Rtext_editor_create(NULL);
 	g_e.loading++;
 	Rtext_editor_set_text(widget, text ? text : "");
@@ -118,7 +170,8 @@ static editor_t* create(const char* title, const char* key, const char* path, co
 	Rtext_editor_set_line_numbers(widget, R_TRUE);
 	Rtext_editor_set_tab_size(widget, 4);
 	Rtext_editor_set_changed_callback(widget, on_changed, NULL);
-	completion_attach(widget, language && ide_iequal(language, "XML"));
+	completion_attach(widget, (language && ide_iequal(language, "XML")) || is_interface(path));
+	editors_zoom_attach(widget);
 	g_e.list = (editor_t*)realloc(g_e.list, sizeof(editor_t) * (size_t)(g_e.count + 1));
 	e = &g_e.list[g_e.count++];
 	memset(e, 0, sizeof(*e));
@@ -126,9 +179,68 @@ static editor_t* create(const char* title, const char* key, const char* path, co
 	e->path = path ? ide_strdup(path) : NULL;
 	e->key = ide_strdup(key);
 	e->title = ide_strdup(title);
-	Rdock_area_add_panel(g_ide_dock, widget, title, R_DOCK_TAB, g_ide_center, 0.0f);
+	dock_editor(widget, title, anchor);
 	Rdock_area_show_panel(g_ide_dock, widget);
+	g_e.last = widget;
 	return e;
+}
+
+/* ---------------------------------------------------------------------------
+ *  Zoom: Ctrl + wheel (Ctrl + '+', '-', 0) in any editor zooms them all, and
+ *  the next start comes back to it (ide.ini, editor_zoom).
+ * ------------------------------------------------------------------------- */
+
+static struct {
+	float zoom;
+	int loaded;
+	/* the editors that are not code editors: the XML panel, the Output */
+	Rid others[8];
+	int other_count;
+} g_z;
+
+static float zoom_now(void) {
+	if (!g_z.loaded) {
+		float saved = (float)atof(prefs_get("editor_zoom"));
+		g_z.zoom = saved >= 0.5f && saved <= 4.0f ? saved : 1.0f;
+		g_z.loaded = R_TRUE;
+	}
+	return g_z.zoom;
+}
+
+/* Every editor of the IDE at one zoom (`from` already is: the user zoomed it). */
+static void zoom_all(float zoom, Rid from) {
+	int i;
+	char text[16];
+	g_z.zoom = zoom;
+	g_z.loaded = R_TRUE;
+	editors_forget_closed();
+	for (i = 0; i < g_e.count; i++) if (g_e.list[i].widget != from) Rtext_editor_set_zoom(g_e.list[i].widget, zoom);
+	for (i = 0; i < g_z.other_count; i++) {
+		if (g_z.others[i] != from && Rwidget_is_valid(g_z.others[i])) Rtext_editor_set_zoom(g_z.others[i], zoom);
+	}
+	snprintf(text, sizeof(text), "%.2f", zoom);
+	prefs_set("editor_zoom", text);
+}
+
+static void on_zoom(Rid editor, float zoom, void* user_data) {
+	(void)user_data;
+	zoom_all(zoom, editor);
+	ide_status("Text zoom: %d %%  (Ctrl + wheel, Ctrl + '+' / '-', Ctrl + 0: 100 %%)", (int)(zoom * 100.0f + 0.5f));
+}
+
+void editors_zoom_attach(Rid editor) {
+	int i, code = by_widget(editor) != NULL;
+	if (editor == R_INVALID_ID || !Rwidget_is_valid(editor)) return;
+	Rtext_editor_set_zoom(editor, zoom_now());
+	Rtext_editor_set_zoom_callback(editor, on_zoom, NULL);
+	if (code) return;
+	for (i = 0; i < g_z.other_count; i++) if (g_z.others[i] == editor) return;
+	if (g_z.other_count < (int)(sizeof(g_z.others) / sizeof(g_z.others[0]))) g_z.others[g_z.other_count++] = editor;
+}
+
+void editors_reset_zoom(void) {
+	zoom_all(1.0f, R_INVALID_ID);
+	ide_status("Text zoom: 100 %%");
 }
 
 /*
@@ -178,7 +290,8 @@ static const char* language_of(const char* path) {
 	const char* name = ide_basename(path);
 	const char* ext = ide_extension(path);
 	if (ide_iequal(name, "CMakeLists.txt") || ide_iequal(ext, "cmake")) return "CMake";
-	if (ide_interface_language(path)) return "XML";
+	/* (an .xmlc, .xmlrs...: its scripts colored in their language, as in the XML panel) */
+	if (ide_interface_language(path)) return Rlanguage_for_file(path) ? Rlanguage_for_file(path) : "XML";
 	return Rlanguage_for_file(path);
 }
 
@@ -201,6 +314,36 @@ Rid editors_open(const char* path, int line) {
 	Rmemory_free(text);
 	go_to_line(e->widget, line);
 	return e->widget;
+}
+
+Rid editors_open_text(const char* path, const char* text, int modified) {
+	Rid found = editors_find(path);
+	editor_t* e;
+	if (found == R_INVALID_ID) {
+		e = create(ide_basename(path), path, path, text, language_of(path));
+		found = e->widget;
+	} else {
+		g_e.loading++;
+		Rtext_editor_set_text(found, text);
+		g_e.loading--;
+		Rdock_area_open_panel(g_ide_dock, found);
+	}
+	editors_set_modified(found, modified);
+	return found;
+}
+
+int editors_is_modified(Rid widget) {
+	editor_t* e = by_widget(widget);
+	return e && e->modified;
+}
+
+void editors_close_file(const char* path) {
+	Rid widget = editors_find(path);
+	editor_t* e = widget != R_INVALID_ID ? by_widget(widget) : NULL;
+	if (!e) return;
+	remove_editor(e);
+	if (g_e.last == widget) g_e.last = R_INVALID_ID;
+	if (Rwidget_is_valid(widget)) Rdock_area_close_panel(g_ide_dock, widget);
 }
 
 Rid editors_open_virtual(const char* title, const char* key, const char* text, const char* language, ide_save_callback save, void* user_data) {
@@ -241,19 +384,39 @@ int editors_any_modified(void) {
 	return R_FALSE;
 }
 
-/* The editor the keyboard is in, for File > Save. */
+/* The editor the keyboard is in, else the one it was in last if its tab is in front, else one in front, for File > Save. */
 static editor_t* focused_editor(void) {
 	Rid focus = Rwindow_get_focused_widget(g_ide_window);
+	editor_t* last;
 	int i;
 	editors_forget_closed();
 	for (i = 0; i < g_e.count; i++) {
 		Rid walk;
 		for (walk = focus; walk != R_INVALID_ID; walk = Rwidget_get_parent(walk)) {
-			if (walk == g_e.list[i].widget) return &g_e.list[i];
+			if (walk == g_e.list[i].widget) {
+				g_e.last = walk;
+				return &g_e.list[i];
+			}
 		}
 	}
+	last = g_e.last != R_INVALID_ID ? by_widget(g_e.last) : NULL;
+	if (last && Rdock_area_is_panel_shown(g_ide_dock, last->widget)) return last;
 	for (i = 0; i < g_e.count; i++) if (Rdock_area_is_panel_shown(g_ide_dock, g_e.list[i].widget)) return &g_e.list[i];
 	return NULL;
+}
+
+const char* editors_current_path(void) {
+	editor_t* e = focused_editor();
+	return e ? e->path : NULL;
+}
+
+int editors_current_interface(const char** path, const char** text, unsigned* revision) {
+	editor_t* e = focused_editor();
+	if (!e || !e->path || !is_interface(e->path)) return R_FALSE;
+	if (path) *path = e->path;
+	if (text) *text = Rtext_editor_get_text(e->widget);
+	if (revision) *revision = e->revision;
+	return R_TRUE;
 }
 
 int editors_save_focused(void);
@@ -282,6 +445,7 @@ void editors_add_marker(const char* path, int line, int column, int error, const
 
 void editors_init(void) {
 	static RLanguageDesc cmake;
+	g_e.last = R_INVALID_ID;
 	memset(&cmake, 0, sizeof(cmake));
 	cmake.name = "CMake";
 	cmake.extensions = "cmake";
@@ -350,6 +514,7 @@ void editors_shutdown(void) {
 	free(g_e.api);
 	free(g_e.api_detail);
 	memset(&g_e, 0, sizeof(g_e));
+	g_e.last = R_INVALID_ID;
 }
 
 /* ---------------------------------------------------------------------------

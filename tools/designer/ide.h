@@ -4,12 +4,14 @@
  * interface; the other files make it an IDE around a CMake project:
  *
  *   os.c        folders, files and programs (CMake, the compiler, the program)
- *   project.c   the project: its folder, New project, settings
- *   editors.c   code editors (C, CMake, any text) in tabs, and completion
+ *   project.c   the project: its folder, New project (with a Raven interface, or native), settings
+ *   editors.c   code editors (C, CMake, any text, the interfaces too) in tabs, and completion
  *   xmlc.c      .xmlc files: their <script> blocks and their interface
  *   build.c     configure, build, run, the Output panel and the build problems
  *   strings.c   the Translations panel (CSV tables) and the language of the preview
  *   welcome.c   the start page (recent projects) and the preferences of the IDE
+ *   island.c    the island at the top: the state of the build, and the preview of the interface being typed
+ *   drawer.c    the content drawer (Ctrl+Space); a right click on an interface: Preview (the visual editor)
  */
 
 #ifndef RAVEN_IDE_H
@@ -109,6 +111,8 @@ void designer_close(void);
 int  designer_has_document(void);
 /** The problems of the interface (the Problems panel). */
 int  designer_problem_count(void);
+/** Closes the visual editor (its panels go): its file goes back to a code editor, unsaved changes included. R_FALSE when the user cancels. */
+int  designer_close_preview(void);
 
 /* ---- island.c: the island at the top of the window (project, file, build, problems) ---- */
 
@@ -116,6 +120,12 @@ void island_init(void);
 void island_shutdown(void);
 /** Shows what changed now (else it follows four times a second). */
 void island_refresh(void);
+/** The preview of the island is built again (the translations or the language of the preview changed). */
+void island_preview_changed(void);
+/** An interface was opened as code: the island unfolds a moment on its preview. */
+void island_show_preview(void);
+/** What the preview of the island shows (scripts of the tests), or R_INVALID_ID. */
+Rid  island_preview_widget(void);
 
 /* ---- drawer.c: the content drawer (Ctrl+Space), the files of the project as tiles ---- */
 
@@ -142,12 +152,21 @@ extern ide_settings_t g_settings;
 void project_init(void);
 void project_shutdown(void);
 int  project_open(const char* folder);
-/** Creates a project in a language ("C", "C++", "Rust", "Python", "Go", "C#", "Zig", "Lua") and opens it. */
-int  project_create(const char* parent_folder, const char* name, const char* language);
+/**
+ * Creates a project in a language ("C", "C++", "Rust", "Python", "Go", "C#", "Zig", "Lua") and opens it.
+ * with_interface: R_TRUE, an interface with its code (main.xmlc, main.xmlrs...) and strings.csv;
+ * R_FALSE, a native project: the language alone and a classic Hello world.
+ */
+int  project_create(const char* parent_folder, const char* name, const char* language, int with_interface);
 void project_refresh_explorer(void);
 void project_save_settings(void);
-/** Opens any file of the project where it belongs: the visual editor, a code editor or the Translations panel. */
+/**
+ * Opens any file of the project where it belongs: a code editor (an interface too: the island is its
+ * preview; the visual editor when it already shows it) or the Translations panel.
+ */
 void ide_open_file(const char* path, int line);
+/** Opens an interface (.xml, .xmlc...) in the visual editor: the Preview of the content drawer. */
+void ide_preview_file(const char* path);
 /** The name of the first add_executable of the CMakeLists.txt of the project. */
 int  project_target_name(char* out, size_t size);
 void project_new(void);
@@ -163,6 +182,23 @@ void editors_init(void);
 void editors_shutdown(void);
 /** Opens a file in a code editor tab (or shows it), and goes to a line (1-based, 0: stays). */
 Rid  editors_open(const char* path, int line);
+/** Opens a file in a code editor with a text of its own (what the visual editor held), marked modified or not. */
+Rid  editors_open_text(const char* path, const char* text, int modified);
+/** Closes the code editor of a file, without asking. */
+void editors_close_file(const char* path);
+int  editors_is_modified(Rid editor);
+/** The file of the code editor in front (the keyboard is in it, or it was last), or NULL. */
+const char* editors_current_path(void);
+/** The same when it is an interface (.xml, .xmlc...): its text now, and a number that changes with it. */
+int  editors_current_interface(const char** path, const char** text, unsigned* revision);
+/** Where a new code editor goes (an editor, the preview), or R_INVALID_ID: above the Output. */
+Rid  editors_anchor(void);
+/** The code editors go back together, in the tabs of the preview (after the panels were reset). */
+void editors_regroup(void);
+/** An editor follows the zoom of the IDE (Ctrl + wheel in one zooms them all; kept in ide.ini). The code editors do by themselves. */
+void editors_zoom_attach(Rid editor);
+/** Every editor back to 100 %. */
+void editors_reset_zoom(void);
 /** Opens a piece of text with a name (a script of a .xmlc), written back through `save`. */
 typedef int (*ide_save_callback)(Rid editor, void* user_data);
 Rid  editors_open_virtual(const char* title, const char* key, const char* text, const char* language, ide_save_callback save, void* user_data);
@@ -189,6 +225,8 @@ void completion_load_raven_api(void);
 
 /** Opens a .xmlc (or .xmlrs, .xmlpy...) whole in the XML panel; the visual editor shows its interface element. */
 int  xmlc_open(const char* path);
+/** The same with a text instead of the file (NULL: the file). */
+int  xmlc_open_text(const char* path, const char* text);
 /** Writes the .xmlc back: the text of the XML panel, scripts and interface together. */
 int  xmlc_save(void);
 /** Where the interface element of the text of an .xmlc is (offsets, and its first line): 1, 0 when there is none, -1 when an element is not closed. */

@@ -106,6 +106,11 @@ typedef struct rvn_text_editor_t {
 	void* completion_user;
 	Rid font;
 	float font_size;
+	/** Zoom of the text, a factor of the font size (0: 1). Ctrl + wheel, Ctrl + '+' / '-' / 0. */
+	float zoom;
+	int no_zoom;
+	RTextEditorZoomCallback zoom_callback;
+	void* zoom_user;
 	char* placeholder;
 
 	rvn_scrollbar_t vbar;
@@ -524,7 +529,7 @@ static void rvn_ed_metrics(const rvn_text_editor_t* ed, rvn_ed_metrics_t* m) {
 			m->italic_id = rvn_font_variant(m->font_id, RVN_FONT_ITALIC);
 		}
 	}
-	m->size = rvn_widget_font_size(widget, ed->font_size);
+	m->size = rvn_widget_font_size(widget, ed->font_size) * (ed->zoom > 0.0f ? ed->zoom : 1.0f);
 	rvn_font_metrics(m->font, m->size, &font_metrics);
 	m->line_height = ceilf(font_metrics.line_height + 2.0f);
 	m->space = rvn_text_width(m->font, m->size, " ", 1);
@@ -1941,6 +1946,95 @@ static void rvn_ed_go(rvn_text_editor_t* ed, rvn_ed_pos_t target, int extend, in
 	rvn_ed_caret_moved(ed, keep_goal);
 }
 
+/* ---------------------------------------------------------------------------
+ *  Zoom
+ * ------------------------------------------------------------------------- */
+
+#define RVN_ED_ZOOM_MIN 0.5f
+#define RVN_ED_ZOOM_MAX 4.0f
+/* one notch of the wheel, one press of Ctrl + '+' */
+#define RVN_ED_ZOOM_STEP 1.1f
+
+static void rvn_ed_relayout(rvn_text_editor_t* ed);
+
+/*
+ * Zooms the text, the point (anchor_x, anchor_y) of the widget staying over
+ * the same text: under the pointer for the wheel, at the caret for the keys.
+ * Returns R_TRUE when the zoom changed; `notify` calls the zoom callback.
+ */
+static int rvn_ed_set_zoom(rvn_text_editor_t* ed, float zoom, float anchor_x, float anchor_y, int notify) {
+	rvn_widget_t* widget = &ed->base;
+	float before_zoom = ed->zoom > 0.0f ? ed->zoom : 1.0f, ax, ay, tx, ty, fx, fy;
+	rvn_ed_metrics_t before, after;
+	rvn_ed_pos_t pos;
+	rvn_vec2_t point;
+	zoom = rvn_clampf(zoom, RVN_ED_ZOOM_MIN, RVN_ED_ZOOM_MAX);
+	/* (back to 100 % when it passes near it: the wheel finds it again) */
+	if (fabsf(zoom - 1.0f) < 0.03f) zoom = 1.0f;
+	zoom = floorf(zoom * 100.0f + 0.5f) / 100.0f;
+	if (fabsf(zoom - before_zoom) < 0.001f) return R_FALSE;
+
+	rvn_ed_metrics(ed, &before);
+	rvn_ed_update_rows(ed, &before);
+	ax = rvn_clampf(anchor_x - before.area.x, 0.0f, before.area.w);
+	ay = rvn_clampf(anchor_y - before.area.y, 0.0f, before.area.h);
+	/*
+	 * What is under the anchor: a place in the text, and where in its row (a
+	 * fraction of the row, a width in font sizes). Rows would not do: with
+	 * word wrap, the lines do not have the same rows at another size.
+	 */
+	tx = ed->hbar.offset + ax;
+	ty = ed->vbar.offset + ay;
+	pos = rvn_ed_point_pos(ed, &before, tx, ty);
+	point = rvn_ed_pos_point(ed, &before, pos);
+	fy = (ty - point.y) / before.line_height;
+	fx = (tx - point.x) / before.size;
+
+	ed->zoom = zoom;
+	rvn_ed_relayout(ed);
+	rvn_ed_metrics(ed, &after);
+	rvn_ed_update_rows(ed, &after);
+	/* (the gutter of the line numbers grows with the text: measured again) */
+	rvn_ed_metrics(ed, &after);
+	rvn_ed_update_bars(ed, &after);
+	/* the same place of the text under the anchor again */
+	point = rvn_ed_pos_point(ed, &after, pos);
+	rvn_scrollbar_set(&ed->vbar, point.y + fy * after.line_height - ay);
+	if (!ed->wrap) rvn_scrollbar_set(&ed->hbar, point.x + fx * after.size - ax);
+	/* no glide from where things were at the other size: they are drawn in their place at once */
+	ed->vbar.shown.started = R_FALSE;
+	ed->hbar.shown.started = R_FALSE;
+	ed->caret_x.started = R_FALSE;
+	ed->caret_y.started = R_FALSE;
+	rvn_ed_complete_close(ed);
+	rvn_widget_invalidate_paint(widget);
+	if (notify && ed->zoom_callback) ed->zoom_callback(widget->id, zoom, ed->zoom_user);
+	return R_TRUE;
+}
+
+/* Ctrl + '+' (or '='), Ctrl + '-', Ctrl + 0, also on the keypad: around the caret, or the middle when it is out of view. */
+static int rvn_ed_zoom_key(rvn_text_editor_t* ed, const REvent* event) {
+	float zoom = ed->zoom > 0.0f ? ed->zoom : 1.0f, x, y;
+	rvn_ed_metrics_t m;
+	rvn_vec2_t point;
+	int in = event->key == R_KEY_EQUAL || event->key == R_KEY_KP_ADD || event->codepoint == '+' || event->codepoint == '=';
+	int out = event->key == R_KEY_MINUS || event->key == R_KEY_KP_SUBTRACT || event->codepoint == '-';
+	int reset = event->key == R_KEY_0 || event->key == R_KEY_KP_0 || event->codepoint == '0';
+	if (ed->no_zoom || !(event->modifiers & (R_MOD_CTRL | R_MOD_SUPER)) || (event->modifiers & R_MOD_ALT)) return R_FALSE;
+	if (!in && !out && !reset) return R_FALSE;
+	rvn_ed_metrics(ed, &m);
+	rvn_ed_update_rows(ed, &m);
+	point = rvn_ed_pos_point(ed, &m, ed->caret);
+	x = m.area.x + point.x - ed->hbar.offset;
+	y = m.area.y + point.y - ed->vbar.offset;
+	if (y < m.area.y || y > m.area.y + m.area.h) {
+		x = m.area.x;
+		y = m.area.y + m.area.h * 0.5f;
+	}
+	rvn_ed_set_zoom(ed, reset ? 1.0f : in ? zoom * RVN_ED_ZOOM_STEP : zoom / RVN_ED_ZOOM_STEP, x, y, R_TRUE);
+	return R_TRUE;
+}
+
 static int rvn_ed_key(rvn_widget_t* widget, const REvent* event) {
 	rvn_text_editor_t* ed = (rvn_text_editor_t*)widget;
 	int shift = (event->modifiers & R_MOD_SHIFT) != 0;
@@ -1950,6 +2044,8 @@ static int rvn_ed_key(rvn_widget_t* widget, const REvent* event) {
 	Rid id = widget->id;
 	rvn_ed_metrics_t m;
 	rvn_ed_pos_t target;
+
+	if (rvn_ed_zoom_key(ed, event)) return R_TRUE;
 
 	rvn_ed_metrics(ed, &m);
 	rvn_ed_update_rows(ed, &m);
@@ -2160,6 +2256,12 @@ static int rvn_text_editor_event(rvn_widget_t* widget, const REvent* event) {
 		}
 		case R_EVENT_MOUSE_WHEEL:
 			rvn_ed_complete_close(ed);
+			/* Ctrl + wheel zooms, around the pointer; it never scrolls what contains the editor */
+			if ((event->modifiers & R_MOD_CTRL) && !ed->no_zoom) {
+				float zoom = ed->zoom > 0.0f ? ed->zoom : 1.0f;
+				if (event->wheel_y != 0.0f) rvn_ed_set_zoom(ed, zoom * powf(RVN_ED_ZOOM_STEP, event->wheel_y), event->local_x, event->local_y, R_TRUE);
+				return R_TRUE;
+			}
 			rvn_ed_metrics(ed, &m);
 			if ((event->modifiers & R_MOD_SHIFT) && !ed->wrap) {
 				changed = rvn_scrollbar_wheel(&ed->hbar, -event->wheel_y * m.space * 12.0f);
@@ -2358,6 +2460,12 @@ static int rvn_text_editor_set_attribute(rvn_widget_t* widget, const char* name,
 	} else if (RVN_ATTR("FontSize") || RVN_ATTR("TextSize")) {
 		if (!rvn_parse_float(value, &number) || number < 0.0f) return R_FALSE;
 		ed->font_size = number;
+	} else if (RVN_ATTR("Zoom")) {
+		if (!rvn_parse_float(value, &number) || number <= 0.0f) return R_FALSE;
+		ed->zoom = rvn_clampf(number, RVN_ED_ZOOM_MIN, RVN_ED_ZOOM_MAX);
+	} else if (RVN_ATTR("Zoomable")) {
+		if (!rvn_parse_bool(value, &flag)) return R_FALSE;
+		ed->no_zoom = !flag;
 	} else {
 		return R_FALSE;
 	}
@@ -2724,6 +2832,34 @@ void Rtext_editor_set_font(Rid id, Rid font, float size) {
 	ed->font = font;
 	ed->font_size = size > 0.0f ? size : 0.0f;
 	rvn_ed_relayout(ed);
+}
+
+void Rtext_editor_set_zoom(Rid id, float zoom) {
+	RVN_EDITOR_VOID(ed, id);
+	if (zoom <= 0.0f) zoom = 1.0f;
+	/* (from the program: the top of the view stays where it is, nobody is told) */
+	if (widget->rect.w > 0.0f && widget->rect.h > 0.0f) {
+		rvn_ed_set_zoom(ed, zoom, 0.0f, 0.0f, R_FALSE);
+	} else {
+		ed->zoom = rvn_clampf(zoom, RVN_ED_ZOOM_MIN, RVN_ED_ZOOM_MAX);
+		rvn_ed_relayout(ed);
+	}
+}
+
+float Rtext_editor_get_zoom(Rid id) {
+	RVN_EDITOR(ed, id, 1.0f);
+	return ed->zoom > 0.0f ? ed->zoom : 1.0f;
+}
+
+void Rtext_editor_set_zoomable(Rid id, int zoomable) {
+	RVN_EDITOR_VOID(ed, id);
+	ed->no_zoom = !zoomable;
+}
+
+void Rtext_editor_set_zoom_callback(Rid id, RTextEditorZoomCallback callback, void* user_data) {
+	RVN_EDITOR_VOID(ed, id);
+	ed->zoom_callback = callback;
+	ed->zoom_user = user_data;
 }
 
 void Rtext_editor_set_placeholder(Rid id, const char* text) {

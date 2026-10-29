@@ -2069,6 +2069,12 @@ namespace Raven
     public delegate IntPtr RTileDragDataCallback(uint tile_view, IntPtr user_data);
 
     /// <summary>
+    /// Called when the user zoomed (to zoom other editors the same, or to keep it for the next time).
+    /// </summary>
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    public delegate void RTextEditorZoomCallback(uint editor, float zoom, IntPtr user_data);
+
+    /// <summary>
     /// Called each time the editor gathers its proposals, with the
     /// start of the word being typed: add your own with
     /// Rtext_editor_add_completion (the fields of a structure, the answers of
@@ -4769,6 +4775,28 @@ namespace Raven
         /// </summary>
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         public static extern void Rtext_editor_set_placeholder(uint editor, [MarshalAs(UnmanagedType.LPUTF8Str)] string text);
+
+        /// <summary>
+        /// Zoom of the text: a factor of its font size, 1 = 100 % (0.5 .. 4).
+        /// The user zooms with Ctrl + wheel (around the pointer), Ctrl + '+',
+        /// Ctrl + '-' and Ctrl + 0 (back to 100 %), keypad included. Set by the
+        /// program, the top of the view stays and the zoom callback is not called.
+        /// XML: Zoom="1.25".
+        /// </summary>
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void Rtext_editor_set_zoom(uint editor, float zoom);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        public static extern float Rtext_editor_get_zoom(uint editor);
+
+        /// <summary>
+        /// R_FALSE: Ctrl + wheel and the keys do not zoom (the wheel scrolls). On by default. XML: Zoomable="false".
+        /// </summary>
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void Rtext_editor_set_zoomable(uint editor, int zoomable);
+
+        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
+        public static extern void Rtext_editor_set_zoom_callback(uint editor, RTextEditorZoomCallback callback, IntPtr user_data);
 
         /// <summary>
         /// Declares a language, or replaces the one that has this name: to

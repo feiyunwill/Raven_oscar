@@ -12,7 +12,9 @@
  *   search   the whole project, by name; each tile says where the file is
  *
  * A double click (or Enter) on a folder goes into it, on a file opens it as
- * the IDE does for any file (ide_open_file). Up goes to the folder above, never
+ * the IDE does for any file (ide_open_file: an interface opens as code, the
+ * island shows it). A right click on an interface (.xml, .xmlc, .xmlpy...)
+ * offers its Preview: the visual editor. Up goes to the folder above, never
  * above the project.
  */
 
@@ -58,7 +60,7 @@ static const char DRAWER_XML[] =
 "      <Separator/>"
 "      <HBox Spacing=\"12\" Slot.Padding=\"16,7\">"
 "        <Label Name=\"drawer.count\" Opacity=\"0.7\" Slot.Fill=\"1\"/>"
-"        <Label Text=\"Double click opens  \xC2\xB7  Esc or Ctrl+Space closes\" Opacity=\"0.5\"/>"
+"        <Label Text=\"Double click opens  \xC2\xB7  Right click: Preview  \xC2\xB7  Esc or Ctrl+Space closes\" Opacity=\"0.5\"/>"
 "      </HBox>"
 "    </VBox>"
 "  </Border>"
@@ -73,6 +75,10 @@ static struct {
 	char** folder_paths; /* the paths behind the items of the folder tree */
 	int folder_path_count;
 	int syncing;
+	/* the menu of a right click on a tile, and the tile it is for */
+	Rid menu, menu_open, menu_preview;
+	char* menu_path;
+	int menu_is_folder;
 } g_d = { R_INVALID_ID };
 
 /* ---------------------------------------------------------------------------
@@ -461,6 +467,38 @@ static void on_activated(Rid tile_view, int index, void* user_data) {
 	free(path);
 }
 
+/* A right click on a tile: Open, and Preview for an interface. */
+static void on_tile_context(Rid tile_view, int index, float x, float y, void* user_data) {
+	const tile_t* tile;
+	int interface;
+	(void)tile_view;
+	(void)user_data;
+	if (index < 0 || index >= g_d.tile_count || g_d.menu == R_INVALID_ID) return;
+	tile = &g_d.tiles_data[index];
+	free(g_d.menu_path);
+	g_d.menu_path = ide_strdup(tile->path);
+	g_d.menu_is_folder = tile->kind == KIND_FOLDER;
+	interface = tile->kind == KIND_INTERFACE || tile->kind == KIND_XML;
+	Rwidget_set_enabled(g_d.menu_preview, interface);
+	Rwidget_set_visibility(g_d.menu_preview, g_d.menu_is_folder ? R_COLLAPSED : R_VISIBLE);
+	Rmenu_open(g_d.menu, g_ide_window, x, y);
+}
+
+static void on_menu(Rid item, void* user_data) {
+	char* path;
+	(void)item;
+	if (!g_d.menu_path) return;
+	path = ide_strdup(g_d.menu_path);
+	if (g_d.menu_is_folder) {
+		go_to(path);
+	} else {
+		drawer_close();
+		if (!strcmp((const char*)user_data, "preview")) ide_preview_file(path);
+		else ide_open_file(path, 0);
+	}
+	free(path);
+}
+
 static void on_folder(Rid tree, Rid item, void* user_data) {
 	const char* path;
 	(void)tree;
@@ -544,6 +582,7 @@ void drawer_init(Rid host) {
 	int i;
 	memset(&g_d, 0, sizeof(g_d));
 	for (i = 0; i < KIND_COUNT; i++) g_d.icons[i] = R_INVALID_ID;
+	g_d.menu = g_d.menu_open = g_d.menu_preview = R_INVALID_ID;
 	g_d.root = Rwidget_create_from_xml(DRAWER_XML, sizeof(DRAWER_XML) - 1);
 	if (g_d.root == R_INVALID_ID) return;
 	Rwidget_add_child(host, g_d.root);
@@ -555,6 +594,12 @@ void drawer_init(Rid host) {
 	g_d.count = Rwidget_find(g_d.root, "drawer.count");
 	for (i = 0; i < KIND_COUNT; i++) g_d.icons[i] = make_icon((kind_t)i);
 	Rtile_view_set_activated_callback(g_d.tiles, on_activated, NULL);
+	Rtile_view_set_context_callback(g_d.tiles, on_tile_context, NULL);
+	g_d.menu = Rwidget_create(R_WIDGET_MENU);
+	g_d.menu_open = Rmenu_add_item(g_d.menu, "Open");
+	g_d.menu_preview = Rmenu_add_item(g_d.menu, "Preview");
+	Rmenu_item_set_clicked_callback(g_d.menu_open, on_menu, (void*)"open");
+	Rmenu_item_set_clicked_callback(g_d.menu_preview, on_menu, (void*)"preview");
 	Rtree_view_set_selection_changed_callback(g_d.folders, on_folder, NULL);
 	Rtext_input_set_changed_callback(g_d.search, on_search, NULL);
 	Rbutton_set_clicked_callback(Rwidget_find(g_d.root, "drawer.close"), on_button, (void*)"close");
@@ -570,6 +615,8 @@ void drawer_shutdown(void) {
 	forget_folders();
 	free(g_d.folder);
 	g_d.folder = NULL;
+	free(g_d.menu_path);
+	g_d.menu_path = NULL;
 	for (i = 0; i < KIND_COUNT; i++) {
 		if (g_d.icons[i] != R_INVALID_ID) Rtexture_destroy(g_d.icons[i]);
 		g_d.icons[i] = R_INVALID_ID;

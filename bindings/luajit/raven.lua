@@ -657,6 +657,7 @@ typedef void (*RTileItemCallback)(Rid tile_view, int index, RTileItem* item, voi
 typedef void (*RTileEventCallback)(Rid tile_view, int index, void* user_data);
 typedef void (*RTileContextCallback)(Rid tile_view, int index, float x, float y, void* user_data);
 typedef const char* (*RTileDragDataCallback)(Rid tile_view, void* user_data);
+typedef void (*RTextEditorZoomCallback)(Rid editor, float zoom, void* user_data);
 typedef void (*RCompletionCallback)(Rid editor, const char* prefix, void* user_data);
 typedef void (*RTextEditorChangedCallback)(Rid editor, void* user_data);
 typedef int (*RDockCloseCallback)(Rid area, Rid panel, void* user_data);
@@ -1338,6 +1339,10 @@ void Rtext_editor_set_tab_inserts_spaces(Rid editor, int enabled);
 void Rtext_editor_set_syntax(Rid editor, RSyntax syntax);
 void Rtext_editor_set_font(Rid editor, Rid font, float size);
 void Rtext_editor_set_placeholder(Rid editor, const char* text);
+void Rtext_editor_set_zoom(Rid editor, float zoom);
+float Rtext_editor_get_zoom(Rid editor);
+void Rtext_editor_set_zoomable(Rid editor, int zoomable);
+void Rtext_editor_set_zoom_callback(Rid editor, RTextEditorZoomCallback callback, void* user_data);
 int Rlanguage_register(const RLanguageDesc* desc);
 int Rlanguage_get(const char* name, RLanguageDesc* desc);
 int Rlanguage_get_count(void);

@@ -120,11 +120,21 @@ void xmlc_close(void) {
 }
 
 int xmlc_open(const char* path) {
+	return xmlc_open_text(path, NULL);
+}
+
+int xmlc_open_text(const char* path, const char* given) {
 	size_t size = 0, start, end;
-	char* text = Rfile_read(path, &size);
-	if (!text) {
+	char* text = given ? NULL : Rfile_read(path, &size);
+	if (!given && !text) {
 		ide_status("Cannot read %s", path);
 		return R_FALSE;
+	}
+	if (given) {
+		/* (the text of a code editor: a copy, freed as the file would be) */
+		size = strlen(given);
+		text = (char*)Rmemory_alloc(size + 1);
+		memcpy(text, given, size + 1);
 	}
 	if (xmlc_is_open()) xmlc_close();
 	g_x.path = ide_strdup(path);

@@ -34,6 +34,7 @@
 
 #include "ide.h"
 
+#include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -101,9 +102,12 @@ static const char* const DESIGNER_XML[] = {
 "          <Separator/>"
 "          <MenuItem Name=\"menu.interact\" Text=\"Use the preview\" Shortcut=\"F6\" Checkable=\"true\" OnClicked=\"view.interact\"/>"
 "          <MenuItem Text=\"Preview in a window\" Shortcut=\"F7\" OnClicked=\"view.run\"/>"
+"          <MenuItem Text=\"Preview the file\" Shortcut=\"Ctrl+Shift+P\" OnClicked=\"view.preview\"/>"
+"          <MenuItem Text=\"Close the preview\" OnClicked=\"view.preview.close\"/>"
 "          <Separator/>"
 "          <MenuItem Text=\"Content drawer\" Shortcut=\"Ctrl+Space\" OnClicked=\"drawer.toggle\"/>"
 "          <MenuItem Text=\"Reset the panels\" OnClicked=\"view.reset\"/>"
+"          <MenuItem Text=\"Text zoom 100 %  (Ctrl + wheel zooms)\" OnClicked=\"view.zoom.reset\"/>"
 "        </Menu>",
 "        <Menu Text=\"Project\">"
 "          <MenuItem Text=\"New project...\" Shortcut=\"Ctrl+Shift+N\" OnClicked=\"project.new\"/>"
@@ -141,6 +145,7 @@ static const char* const DESIGNER_XML[] = {
 "          <ComboBox Name=\"preview.language\" Width=\"200\" Tooltip=\"The language of the preview: the tables of the project, right to left included\"/>"
 "          <Spacer Slot.Fill=\"1\"/>"
 "          <Label Name=\"stage.size\" Opacity=\"0.6\" Slot.VAlign=\"Center\"/>"
+"          <Button Text=\"Close\" Style=\"Flat\" OnClicked=\"view.preview.close\" Tooltip=\"Closes the preview: the file goes back to a code editor\" Slot.VAlign=\"Center\"/>"
 "        </HBox>"
 "        <Separator/>"
 "        <Overlay Slot.Fill=\"1\">"
@@ -149,7 +154,7 @@ static const char* const DESIGNER_XML[] = {
 "          </ScrollBox>"
 "          <VBox Name=\"stage.empty\" Spacing=\"8\" Slot.HAlign=\"Center\" Slot.VAlign=\"Center\" Visibility=\"Collapsed\">"
 "            <Label Text=\"No interface open\" TextSize=\"20\" Slot.HAlign=\"Center\"/>"
-"            <Label Text=\"Open an interface from the content drawer (Ctrl+Space): .xml, .xmlc, .xmlrs..., or use File &gt; New.\" Opacity=\"0.6\" Slot.HAlign=\"Center\"/>"
+"            <Label Text=\"Right click an interface in the content drawer (Ctrl+Space) and choose Preview, or use File &gt; New.\" Opacity=\"0.6\" Slot.HAlign=\"Center\"/>"
 "          </VBox>"
 "        </Overlay>"
 "      </VBox>"
@@ -1473,8 +1478,42 @@ static int confirm_discard(void) {
 	return ide_confirm_unsaved("closing");
 }
 
+/*
+ * The panels of the visual editor are only there while it shows an interface
+ * (the Preview of the content drawer, File > New...): the code editors have
+ * the room the rest of the time. Hidden in this order, they come back in the
+ * other one, each where it was.
+ */
+static const char* const VISUAL_PANELS[] = { "source", "problems", "panel.properties", "panel.tree", "panel.widgets", "panel.preview" };
+#define VISUAL_PANEL_COUNT ((int)(sizeof(VISUAL_PANELS) / sizeof(VISUAL_PANELS[0])))
+
+static void show_visual_panels(int shown, int force) {
+	static int now = -1;
+	int i;
+	if (now == shown && !force) return;
+	now = shown;
+	if (!shown) {
+		for (i = 0; i < VISUAL_PANEL_COUNT; i++) Rdock_area_hide_panel(g.dock, Rwidget_find(g.window, VISUAL_PANELS[i]));
+		return;
+	}
+	for (i = VISUAL_PANEL_COUNT - 1; i >= 0; i--) {
+		Rid panel = Rwidget_find(g.window, VISUAL_PANELS[i]);
+		Rdock_area_open_panel(g.dock, panel);
+		/* the preview goes with the code editors, in their tabs (where it was before they came) */
+		if (panel == g_ide_center) {
+			Rid editor = editors_anchor();
+			if (editor != R_INVALID_ID && editor != g_ide_center) {
+				Rdock_area_move_panel(g.dock, panel, R_DOCK_TAB, editor, 0.0f);
+				Rdock_area_show_panel(g.dock, panel);
+			}
+		}
+	}
+	Rdock_area_show_panel(g.dock, g_ide_center);
+}
+
 static void show_document(int shown) {
 	g.has_document = shown;
+	show_visual_panels(shown, R_FALSE);
 	Rwidget_set_visibility(g.frame, shown ? R_VISIBLE : R_COLLAPSED);
 	Rwidget_set_visibility(g.outline, shown ? R_VISIBLE : R_COLLAPSED);
 	Rwidget_set_visibility(Rwidget_find(g.window, "stage.empty"), shown ? R_COLLAPSED : R_VISIBLE);
@@ -1787,6 +1826,7 @@ int designer_get_names(const char** names, int max) {
 }
 
 void designer_refresh_preview(void) {
+	island_preview_changed();
 	if (g.document != R_INVALID_ID && !g.broken) rebuild_preview();
 }
 
@@ -1854,7 +1894,56 @@ static void action_view(Rid sender, const char* action, void* user_data) {
 		set_status(g.run_window != R_INVALID_ID ? "Running in its own window." : "The interface could not be built: see the Problems tab.");
 	} else if (strcmp(action, "view.reset") == 0) {
 		Rdock_area_load_layout(g.dock, (const char*)Rwidget_get_user_handle(g.dock));
+		/* (the code editors are not in the layout: they go back together, with the preview) */
+		editors_regroup();
+		/* (the layout names the panels of the visual editor: without an interface they go again) */
+		if (!g.has_document) show_visual_panels(R_FALSE, R_TRUE);
+	} else if (strcmp(action, "view.preview") == 0) {
+		/* the interface of the code editor in front */
+		const char* path = editors_current_path();
+		if (path && (ide_interface_language(path) || ide_iequal(ide_extension(path), "xml"))) {
+			char* copy = copy_text(path);
+			ide_preview_file(copy);
+			free(copy);
+		} else if (g.has_document) {
+			Rdock_area_open_panel(g.dock, g_ide_center);
+		} else {
+			set_status("The file in front is not an interface (.xml, .xmlc, .xmlrs...): nothing to preview.");
+		}
+	} else if (strcmp(action, "view.preview.close") == 0) {
+		designer_close_preview();
+	} else if (strcmp(action, "view.zoom.reset") == 0) {
+		editors_reset_zoom();
 	}
+}
+
+/* The preview closes: the file goes back to a code editor, its unsaved changes with it. */
+int designer_close_preview(void) {
+	char* path;
+	char* text;
+	int modified = g.modified;
+	if (!g.has_document) return R_TRUE;
+	if (!g.path) {
+		/* a document never saved has no code editor to go to: saved, or dropped */
+		RMessageResult answer = g.modified ? Rmessage_box(g.window, "Close the preview", "This interface was never saved. Save it?", R_MESSAGE_YES_NO_CANCEL) : R_MESSAGE_RESULT_NO;
+		if (answer == R_MESSAGE_RESULT_CANCEL) return R_FALSE;
+		if (answer == R_MESSAGE_RESULT_YES && !save_file(R_TRUE)) return R_FALSE;
+		if (!g.path) {
+			designer_close();
+			set_status("Preview closed.");
+			return R_TRUE;
+		}
+		modified = R_FALSE;
+	}
+	path = copy_text(g.path);
+	/* (the whole file: an .xmlc is whole in the XML panel) */
+	text = copy_text(Rtext_editor_get_text(g.source));
+	designer_close();
+	editors_open_text(path, text, modified);
+	set_status("Preview closed: %s is back in a code editor.", ide_basename(path));
+	free(text);
+	free(path);
+	return R_TRUE;
 }
 
 static void action_problems(Rid sender, const char* action, void* user_data) {
@@ -1898,6 +1987,12 @@ static void run_frames(int count) {
  *   set NAME VALUE sets an attribute of the selection ('-' removes it)
  *   expect TEXT    stops with an error unless the XML contains TEXT ('~' stands for a space)
  *   project DIR NAME LANGUAGE   creates the project DIR/NAME (C, C++, Rust, Python, Go, C#, Zig, Lua) and opens it
+ *   nativeproject DIR NAME LANGUAGE   the same, native: the language alone and a Hello world
+ *   preview PATH   opens an interface in the visual editor (the Preview of the content drawer)
+ *   expectisland NAME TEXT  stops unless the label NAME of the preview of the island shows TEXT ('-': no preview there)
+ *   expectpanel NAME 0|1    stops unless the panel NAME of the IDE is open (1) or hidden (0)
+ *   wheel DY       turns the wheel (Ctrl held: key 302 2 first)
+ *   expectzoom Z   stops unless the XML panel, the Output and the code editor in front are zoomed Z (1.21)
  *   prefix PATH    the folder of the Raven package (Build settings)
  *   open PATH      opens a file as the content drawer does, or a project folder
  *   expectfile PATH TEXT   stops unless the file contains TEXT
@@ -2002,13 +2097,50 @@ static int designer_script(char* script) {
 				fprintf(stderr, "raven_designer: expected the XML to contain: %s\n---\n%s---\n", text, Rtext_editor_get_text(g.source));
 				return R_FALSE;
 			}
-		} else if (strcmp(token, "project") == 0) {
+		} else if (strcmp(token, "project") == 0 || strcmp(token, "nativeproject") == 0) {
+			int with_interface = strcmp(token, "project") == 0;
 			char* folder = next_token(&cursor);
 			char* name = next_token(&cursor);
 			char* language = next_token(&cursor);
-			if (!project_create(folder, name, language && strcmp(language, "-") ? language : "C")) {
+			if (!project_create(folder, name, language && strcmp(language, "-") ? language : "C", with_interface)) {
 				fprintf(stderr, "raven_designer: cannot create the project %s in %s\n", name, folder);
 				return R_FALSE;
+			}
+		} else if (strcmp(token, "preview") == 0) {
+			ide_preview_file(next_token(&cursor));
+		} else if (strcmp(token, "expectisland") == 0) {
+			char* name = next_token(&cursor);
+			char* text = next_token(&cursor);
+			char* c;
+			Rid preview = island_preview_widget();
+			Rid label = preview != R_INVALID_ID && strcmp(name, "-") ? Rwidget_find(preview, name) : R_INVALID_ID;
+			for (c = text; *c; c++) if (*c == '~') *c = ' ';
+			if (!strcmp(name, "-") ? preview != R_INVALID_ID : (label == R_INVALID_ID || strcmp(Rlabel_get_text(label), text) != 0)) {
+				fprintf(stderr, "raven_designer: expected the island to show %s \"%s\", it shows %s\n", name, text,
+					preview == R_INVALID_ID ? "no preview" : label != R_INVALID_ID ? Rlabel_get_text(label) : "a preview");
+				return R_FALSE;
+			}
+		} else if (strcmp(token, "expectpanel") == 0) {
+			char* name = next_token(&cursor);
+			int open = atoi(next_token(&cursor));
+			if (Rdock_area_is_panel_open(g.dock, find_anywhere(name)) != open) {
+				fprintf(stderr, "raven_designer: expected the panel %s to be %s\n", name, open ? "open" : "hidden");
+				return R_FALSE;
+			}
+		} else if (strcmp(token, "wheel") == 0) {
+			Rwindow_inject_mouse_wheel(g.window, 0.0f, (float)atof(next_token(&cursor)));
+		} else if (strcmp(token, "expectzoom") == 0) {
+			float zoom = (float)atof(next_token(&cursor));
+			Rid editors[3];
+			int k;
+			editors[0] = g.source;
+			editors[1] = Rwidget_find(g.window, "output");
+			editors[2] = editors_current_path() ? editors_find(editors_current_path()) : g.source;
+			for (k = 0; k < 3; k++) {
+				if (fabsf(Rtext_editor_get_zoom(editors[k]) - zoom) > 0.005f) {
+					fprintf(stderr, "raven_designer: expected the editors at zoom %.2f, one is at %.2f\n", zoom, Rtext_editor_get_zoom(editors[k]));
+					return R_FALSE;
+				}
 			}
 		} else if (strcmp(token, "prefix") == 0) {
 			snprintf(g_settings.raven_prefix, sizeof(g_settings.raven_prefix), "%s", next_token(&cursor));
@@ -2171,7 +2303,7 @@ static int build_interface(void) {
 		"file.save_all", "file.quit" };
 	static const char* const views[] = {
 		"view.theme.dark", "view.theme.light", "view.theme.glass_dark", "view.theme.glass_light", "view.interact", "view.interact.switch",
-		"view.run", "view.reset"
+		"view.run", "view.reset", "view.preview", "view.preview.close", "view.zoom.reset"
 	};
 	static const struct { const char* text; const char* action; } context[] = {
 		{ "Duplicate", "edit.duplicate" }, { "Delete", "edit.delete" }, { NULL, NULL }, { "Move up", "edit.up" }, { "Move down", "edit.down" },
@@ -2265,6 +2397,9 @@ static int build_interface(void) {
 	accessibility_init();
 	drawer_init(Rwidget_find(g.window, "main.overlay"));
 	island_init();
+	/* (after welcome_init: the zoom of the text is one of the preferences) */
+	editors_zoom_attach(g.source);
+	editors_zoom_attach(Rwidget_find(g.window, "output"));
 	Rdock_area_show_panel(g.dock, g.source);
 	return R_TRUE;
 }

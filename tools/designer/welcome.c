@@ -131,6 +131,19 @@ static const char* detect_language(const char* folder) {
 			if (found) return ide_language_at(i)->name;
 		}
 	}
+	/* a native project: the file its tools read, or its program */
+	{
+		static const struct { const char* file; const char* language; } natives[] = {
+			{ "main.c", "C" }, { "main.cpp", "C++" }, { "Cargo.toml", "Rust" }, { "go.mod", "Go" }, { "Program.cs", "C#" },
+			{ "build.zig", "Zig" }, { "main.py", "Python" }, { "main.lua", "Lua" }
+		};
+		for (i = 0; i < (int)(sizeof(natives) / sizeof(natives[0])); i++) {
+			char* path = ide_join(folder, natives[i].file);
+			int found = ide_file_exists(path);
+			free(path);
+			if (found) return natives[i].language;
+		}
+	}
 	{
 		char* cmake = ide_join(folder, "CMakeLists.txt");
 		int found = ide_file_exists(cmake);
@@ -501,7 +514,7 @@ static const char WELCOME_XML[] =
 "      <Label Text=\"Raven IDE\" TextSize=\"34\"/>"
 "      <Label Name=\"welcome.version\" Opacity=\"0.55\"/>"
 "      <Spacer Height=\"22\"/>"
-"      <Button Text=\"New project...\" Style=\"Primary\" OnClicked=\"project.new\" Tooltip=\"An interface with its code, in the language you choose (Ctrl+Shift+N)\"/>"
+"      <Button Text=\"New project...\" Style=\"Primary\" OnClicked=\"project.new\" Tooltip=\"In the language you choose: with a Raven interface, or native (Ctrl+Shift+N)\"/>"
 "      <Button Text=\"Open a folder...\" OnClicked=\"project.open\" Tooltip=\"A project folder (Ctrl+Shift+O)\"/>"
 "      <Button Text=\"Open a file...\" OnClicked=\"file.open\" Tooltip=\"An interface: .xml, .xmlc, .xmlrs... (Ctrl+O)\"/>"
 "      <Button Name=\"welcome.back\" Style=\"Flat\" OnClicked=\"welcome.back\" Visibility=\"Collapsed\"/>"

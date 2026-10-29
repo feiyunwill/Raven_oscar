@@ -280,6 +280,8 @@ static const rvn_schema_attribute_t g_text_editor[] = {
 	B("Completion", "Proposes words while typing."),
 	B("AutoPairs", "Closes brackets and quotes, indents after them."),
 	N("TextSize", "Size of the text; 0 uses the theme."),
+	N("Zoom", "Zoom of the text, 1 = 100 % (0.5 .. 4): Ctrl + wheel changes it."),
+	B("Zoomable", "Ctrl + wheel, Ctrl + '+' / '-' / 0 zoom the text (on by default)."),
 	F("Font", "Font file, or \"monospace\"."),
 	B("Markdown", "The text is Markdown, styled where it is typed (the same as Language=\"Markdown\")."),
 	A("OnChanged", "Action fired at each change."),

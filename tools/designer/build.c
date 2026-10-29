@@ -552,6 +552,15 @@ static kind_t project_kind(void) {
 		free(file);
 		return KIND_LUA;
 	}
+	/* native projects: a program in the language alone */
+	if ((file = first_with_extension("py")) != NULL) {
+		free(file);
+		return KIND_PYTHON;
+	}
+	if ((file = first_with_extension("lua")) != NULL) {
+		free(file);
+		return KIND_LUA;
+	}
 	return KIND_NONE;
 }
 
@@ -562,7 +571,7 @@ static int have_project(void) {
 	}
 	g_b.kind = project_kind();
 	if (g_b.kind == KIND_NONE) {
-		ide_status("Nothing to build: the project has no CMakeLists.txt, Cargo.toml, go.mod, .csproj, build.zig, .xmlpy or .xmllua.");
+		ide_status("Nothing to build: the project has no CMakeLists.txt, Cargo.toml, go.mod, .csproj, build.zig, .xmlpy, .xmllua, .py or .lua.");
 		return R_FALSE;
 	}
 	return R_TRUE;
@@ -706,6 +715,23 @@ static int add_language_steps(const char* action) {
 			break;
 		case KIND_PYTHON:
 			main_file = has_file("main.xmlpy") ? ide_strdup("main.xmlpy") : first_with_extension("xmlpy");
+			if (!main_file) {
+				/* a native project: python and its file, nothing of Raven */
+				main_file = has_file("main.py") ? ide_strdup("main.py") : first_with_extension("py");
+				step = add_step(g_project_dir);
+				add_arg(step, "%s", python_program());
+				if (run) {
+					step->run = R_TRUE;
+					add_arg(step, "%s", main_file);
+					add_run_arguments(step);
+				} else {
+					add_arg(step, "-m");
+					add_arg(step, "py_compile");
+					add_arg(step, "%s", main_file);
+				}
+				free(main_file);
+				break;
+			}
 			/* building: ravenc reads it (its mistakes are reported); running: python with raven_xmlpy */
 			step = add_step(g_project_dir);
 			if (run) {
@@ -725,6 +751,26 @@ static int add_language_steps(const char* action) {
 			break;
 		case KIND_LUA:
 			main_file = has_file("main.xmllua") ? ide_strdup("main.xmllua") : first_with_extension("xmllua");
+			if (!main_file) {
+				/* a native project: LuaJIT (or Lua) and its file */
+				char found[1024], check[700];
+				const char* lua = ide_find_program("luajit", found, sizeof(found)) || !ide_find_program("lua", found, sizeof(found)) ? "luajit" : "lua";
+				main_file = has_file("main.lua") ? ide_strdup("main.lua") : first_with_extension("lua");
+				step = add_step(g_project_dir);
+				add_arg(step, "%s", lua);
+				if (run) {
+					step->run = R_TRUE;
+					add_arg(step, "%s", main_file);
+					add_run_arguments(step);
+				} else {
+					/* building: the file is read, its mistakes are reported, nothing runs */
+					snprintf(check, sizeof(check), "assert(loadfile('%s'))", main_file);
+					add_arg(step, "-e");
+					add_arg(step, "%s", check);
+				}
+				free(main_file);
+				break;
+			}
 			step = add_step(g_project_dir);
 			if (run) {
 				char script[1200];

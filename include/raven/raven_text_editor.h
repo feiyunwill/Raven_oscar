@@ -216,6 +216,23 @@ extern "C" {
 	/** @brief Text shown, dimmed, while the editor is empty. */
 	RAVEN_API void Rtext_editor_set_placeholder(Rid editor, const char* text);
 
+	/* ---- zoom ---- */
+
+	/**
+	 * @brief Zoom of the text: a factor of its font size, 1 = 100 % (0.5 .. 4).
+	 * The user zooms with Ctrl + wheel (around the pointer), Ctrl + '+',
+	 * Ctrl + '-' and Ctrl + 0 (back to 100 %), keypad included. Set by the
+	 * program, the top of the view stays and the zoom callback is not called.
+	 * XML: Zoom="1.25".
+	 */
+	RAVEN_API void Rtext_editor_set_zoom(Rid editor, float zoom);
+	RAVEN_API float Rtext_editor_get_zoom(Rid editor);
+	/** @brief R_FALSE: Ctrl + wheel and the keys do not zoom (the wheel scrolls). On by default. XML: Zoomable="false". */
+	RAVEN_API void Rtext_editor_set_zoomable(Rid editor, int zoomable);
+	/** @brief Called when the user zoomed (to zoom other editors the same, or to keep it for the next time). */
+	typedef void (*RTextEditorZoomCallback)(Rid editor, float zoom, void* user_data);
+	RAVEN_API void Rtext_editor_set_zoom_callback(Rid editor, RTextEditorZoomCallback callback, void* user_data);
+
 	/* ---- languages ---- */
 
 	/**
