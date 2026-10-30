@@ -2,7 +2,12 @@
 from raven import *
 import os
 
-THEME_DIR = "."
+
+# --------------------------------------------------
+# Configuration
+# --------------------------------------------------
+
+THEME_DIR = os.path.dirname(os.path.abspath(__file__))
 
 THEMES = {
     "Ocean": "ocean.xml",
@@ -10,12 +15,20 @@ THEMES = {
     "Nord": "nord.xml",
     "Paper": "paper.xml",
     "Frost": "frost.xml",
+    "Dracula": "dracula.xml",
+    "Ember": "ember.xml",
+    "Forest": "forest.xml",
+    "Monokai": "monokai.xml",
+    "Sakura": "sakura.xml",
+    "Solarized Dark": "solarized-dark.xml"
 }
 
 window = None
 status_label = None
 layer_label = None
+
 selected_tool = "Move"
+loaded_themes = set()
 
 
 # --------------------------------------------------
@@ -23,13 +36,23 @@ selected_tool = "Move"
 # --------------------------------------------------
 
 def load_themes():
+    loaded_themes.clear()
+
     for name, filename in THEMES.items():
         path = os.path.join(THEME_DIR, filename)
 
-        if os.path.isfile(path):
-            Rtheme_load(path)
-        else:
+        if not os.path.isfile(path):
             print(f"[Theme] Missing file: {path}")
+            continue
+
+        try:
+            Rtheme_load(path)
+
+            loaded_themes.add(name)
+            print(f"[Theme] Loaded: {name}")
+
+        except Exception as error:
+            print(f"[Theme] Failed to load {name}: {error}")
 
 
 def use_theme(sender, action, user):
@@ -39,21 +62,38 @@ def use_theme(sender, action, user):
         return
 
     name = Rcombo_box_get_item_text(sender, index)
-    Rtheme_use(name)
 
-    Rlabel_set_text(status_label, f"Theme: {name}")
+    if name not in loaded_themes:
+        Rlabel_set_text(
+            status_label,
+            f"Theme unavailable: {name}"
+        )
+        return
+
+    try:
+        Rtheme_use(name)
+
+        Rlabel_set_text(
+            status_label,
+            f"Theme: {name}"
+        )
+
+    except Exception as error:
+        print(f"[Theme] Could not activate {name}: {error}")
+
+        Rlabel_set_text(
+            status_label,
+            f"Failed to activate: {name}"
+        )
 
 
 def change_accent(sender, action, user):
-    r, g, b, a = 0.0, 0.0, 0.0, 1.0
-
     color = Rcolor_picker_get_color(sender)
 
-    # Some bindings return the color as a tuple.
-    if isinstance(color, tuple):
-        r, g, b, a = color
-    else:
+    if not isinstance(color, (tuple, list)) or len(color) < 3:
         return
+
+    r, g, b = color[:3]
 
     Rtheme_set_accent(r, g, b)
 
@@ -66,12 +106,30 @@ def change_accent(sender, action, user):
 
 
 def save_theme(sender, action, user):
-    success = Rtheme_save("custom-theme.xml", "Custom")
+    try:
+        success = Rtheme_save(
+            os.path.join(THEME_DIR, "custom-theme.xml"),
+            "Custom"
+        )
 
-    if success:
-        Rlabel_set_text(status_label, "Saved: custom-theme.xml")
-    else:
-        Rlabel_set_text(status_label, "Could not save theme")
+        if success:
+            Rlabel_set_text(
+                status_label,
+                "Saved: custom-theme.xml"
+            )
+        else:
+            Rlabel_set_text(
+                status_label,
+                "Could not save theme"
+            )
+
+    except Exception as error:
+        print(f"[Theme] Save failed: {error}")
+
+        Rlabel_set_text(
+            status_label,
+            "Theme save failed"
+        )
 
 
 # --------------------------------------------------
@@ -81,7 +139,14 @@ def save_theme(sender, action, user):
 def select_tool(sender, action, user):
     global selected_tool
 
-    selected_tool = action.split(".")[-1].replace("_", " ").title()
+    if not action:
+        return
+
+    selected_tool = (
+        action.split(".")[-1]
+        .replace("_", " ")
+        .title()
+    )
 
     Rlabel_set_text(
         layer_label,
@@ -116,6 +181,10 @@ def select_layer(sender, action, user):
         f"Layer selected: {name}"
     )
 
+
+# --------------------------------------------------
+# Action bindings
+# --------------------------------------------------
 
 def bind_actions():
     Raction_bind("theme.use", use_theme, None)
@@ -171,11 +240,14 @@ UI = """
             <Button Text="Layer" Style="Flat"/>
             <Button Text="View" Style="Flat"/>
             <Button Text="Window" Style="Flat"/>
+
             <Spacer Slot.Fill="1"/>
+
             <Label Text="Theme"/>
+
             <ComboBox
                 Name="theme_selector"
-                Items="Ocean|Midnight|Nord|Paper|Frost"
+                Items="Ocean|Midnight|Nord|Paper|Frost|Dracula|Ember|Forest|Monokai|Sakura|Solarized Dark"
                 Selected="0"
                 Width="150"
                 OnChanged="theme.use"/>
@@ -183,9 +255,10 @@ UI = """
 
         <Separator/>
 
-        <!-- Toolbar -->
+        <!-- Main workspace -->
         <HBox Spacing="0" Slot.Fill="1">
 
+            <!-- Toolbar -->
             <VBox
                 Width="66"
                 Spacing="8"
@@ -219,7 +292,9 @@ UI = """
 
                 <Spacer Slot.Fill="1"/>
 
-                <Label Text="TOOLS" TextSize="10" Opacity="0.5"/>
+                <Label Text="TOOLS"
+                    TextSize="10"
+                    Opacity="0.5"/>
             </VBox>
 
             <Separator Orientation="Vertical"/>
@@ -228,6 +303,7 @@ UI = """
             <VBox Spacing="0" Slot.Fill="1">
 
                 <HBox Spacing="12" Slot.Padding="12,8">
+
                     <Label Text="Untitled Theme"
                         TextSize="15"/>
 
@@ -241,15 +317,19 @@ UI = """
 
                     <Button Text="100%"
                         Style="Flat"/>
+
                 </HBox>
 
                 <Separator/>
 
                 <!-- Canvas -->
-                <VBox Spacing="12" Slot.Fill="1"
+                <VBox
+                    Spacing="12"
+                    Slot.Fill="1"
                     Slot.Padding="24">
 
                     <Border Padding="24" Slot.Fill="1">
+
                         <VBox Spacing="18">
 
                             <Label Text="LIVE PREVIEW"
@@ -270,6 +350,7 @@ UI = """
                                 TextSize="17"/>
 
                             <HBox Spacing="10">
+
                                 <Button Text="Primary"
                                     Style="Primary"/>
 
@@ -277,23 +358,27 @@ UI = """
 
                                 <Button Text="Flat"
                                     Style="Flat"/>
+
                             </HBox>
 
                             <Label Text="Controls"
                                 TextSize="17"/>
 
                             <HBox Spacing="12">
+
                                 <Checkbox Text="Checkbox"
                                     Checked="true"/>
 
                                 <Checkbox Text="Switch"
                                     Style="Switch"
                                     Checked="true"/>
+
                             </HBox>
 
                             <Slider Value="0.65"/>
 
                             <HBox Spacing="10">
+
                                 <TextInput
                                     Placeholder="Type something..."
                                     Slot.Fill="1"/>
@@ -302,6 +387,7 @@ UI = """
                                     Items="Option A|Option B|Option C"
                                     Selected="0"
                                     Width="150"/>
+
                             </HBox>
 
                             <ProgressBar Value="0.7"/>
@@ -310,10 +396,13 @@ UI = """
 
                             <Label Text="Raven GUI • Theme preview"
                                 Opacity="0.5"/>
+
                         </VBox>
+
                     </Border>
 
                 </VBox>
+
             </VBox>
 
             <Separator Orientation="Vertical"/>
@@ -322,15 +411,19 @@ UI = """
             <VBox Width="285" Spacing="0">
 
                 <HBox Slot.Padding="14,12">
+
                     <Label Text="Properties"
                         TextSize="17"/>
+
                 </HBox>
 
                 <Separator/>
 
-                <!-- Layers -->
-                <VBox Spacing="10" Slot.Padding="14,14">
+                <VBox
+                    Spacing="10"
+                    Slot.Padding="14,14">
 
+                    <!-- Layers -->
                     <Label Text="LAYERS"
                         TextSize="11"
                         Opacity="0.6"/>
@@ -348,6 +441,7 @@ UI = """
 
                     <Separator/>
 
+                    <!-- Appearance -->
                     <Label Text="APPEARANCE"
                         TextSize="11"
                         Opacity="0.6"/>
@@ -369,6 +463,7 @@ UI = """
 
                     <Separator/>
 
+                    <!-- Metrics -->
                     <Label Text="METRICS"
                         TextSize="11"
                         Opacity="0.6"/>
@@ -385,14 +480,18 @@ UI = """
 
                     <Label Text="Raven Theme Studio"
                         Opacity="0.45"/>
+
                 </VBox>
+
             </VBox>
+
         </HBox>
 
         <Separator/>
 
         <!-- Status bar -->
         <HBox Spacing="12" Slot.Padding="10,6">
+
             <Label Name="status"
                 Text="Ready"
                 Opacity="0.75"/>
@@ -404,38 +503,51 @@ UI = """
 
             <Label Text="100%"
                 Opacity="0.55"/>
+
         </HBox>
 
     </VBox>
+
 </Window>
 """
 
 
+# --------------------------------------------------
+# Application
+# --------------------------------------------------
+
 def main():
-    global window, status_label, layer_label
+    global window
+    global status_label
+    global layer_label
 
     Rinit(R_BACKEND_VULKAN)
 
-    load_themes()
-    bind_actions()
+    try:
+        load_themes()
+        bind_actions()
 
-    window = Rwindow_create_from_xml(UI)
+        window = Rwindow_create_from_xml(UI)
 
-    if window == R_INVALID_ID:
+        if window == R_INVALID_ID:
+            return
+
+        status_label = Rwidget_find(window, "status")
+        layer_label = Rwidget_find(window, "layer_info")
+
+        if "Ocean" in loaded_themes:
+            Rtheme_use("Ocean")
+
+        elif loaded_themes:
+            Rtheme_use(next(iter(loaded_themes)))
+
+        Rwindow_show(window)
+
+        while Rwait_frame(-1.0):
+            pass
+
+    finally:
         Rshutdown()
-        return
-
-    status_label = Rwidget_find(window, "status")
-    layer_label = Rwidget_find(window, "layer_info")
-
-    Rtheme_use("Ocean")
-
-    Rwindow_show(window)
-
-    while Rwait_frame(-1.0):
-        pass
-
-    Rshutdown()
 
 
 if __name__ == "__main__":
