@@ -10,3 +10,4 @@ dist/
 dist-release/
 out/
 dev/
+*.patch
