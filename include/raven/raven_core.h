@@ -186,11 +186,6 @@ extern "C" {
 	RAVEN_API void Rshutdown(void);
 
 	RAVEN_API int Ris_initialized(void);
-	/**
-	 * @deprecated Raven no longer has editions: it is open source (Apache
-	 * License 2.0) and never shows a watermark. Always R_FALSE.
-	 */
-	RAVEN_API int Ris_free_edition(void);
 
 	/** @return The library version, e.g. "0.1.0". */
 	RAVEN_API const char* Rget_version(void);

@@ -1714,9 +1714,6 @@ public:
 
 	void get_mouse_position(float* x, float* y) const { Rwindow_get_mouse_position(id_, x, y); }
 
-	/// @deprecated Raven no longer shows a watermark. Always R_FALSE, with zeros.
-	int get_watermark_rect(float* x, float* y, float* width, float* height) const { return Rwindow_get_watermark_rect(id_, x, y, width, height); }
-
 	/// Inject input as if it came from the OS. Positions are in logical units.
 	/// Useful for automated tests, replays and when Raven is driven by a host
 	/// application.
@@ -2147,10 +2144,6 @@ inline int init_ex(const RInitDesc* desc) { return Rinit_ex(desc); }
 inline void shutdown() { Rshutdown(); }
 
 inline int is_initialized() { return Ris_initialized(); }
-
-/// @deprecated Raven no longer has editions: it is open source (Apache
-/// License 2.0) and never shows a watermark. Always R_FALSE.
-inline int is_free_edition() { return Ris_free_edition(); }
 
 /// Returns: The library version, e.g. "0.1.0".
 inline const char* get_version() { return Rget_version(); }

@@ -2009,16 +2009,6 @@ def Ris_initialized():
     return _lib.Ris_initialized()
 
 
-_lib.Ris_free_edition.argtypes = []
-_lib.Ris_free_edition.restype = ctypes.c_int
-
-
-def Ris_free_edition():
-    """@deprecated Raven no longer has editions: it is open source (Apache
-    License 2.0) and never shows a watermark. Always R_FALSE."""
-    return _lib.Ris_free_edition()
-
-
 _lib.Rget_version.argtypes = []
 _lib.Rget_version.restype = ctypes.c_char_p
 
@@ -2927,20 +2917,6 @@ def Rwindow_get_mouse_position(window):
     y_ = ctypes.c_float()
     _lib.Rwindow_get_mouse_position(window, ctypes.byref(x_), ctypes.byref(y_))
     return (x_.value, y_.value)
-
-
-_lib.Rwindow_get_watermark_rect.argtypes = [ctypes.c_uint32, ctypes.POINTER(ctypes.c_float), ctypes.POINTER(ctypes.c_float), ctypes.POINTER(ctypes.c_float), ctypes.POINTER(ctypes.c_float)]
-_lib.Rwindow_get_watermark_rect.restype = ctypes.c_int
-
-
-def Rwindow_get_watermark_rect(window):
-    """@deprecated Raven no longer shows a watermark. Always R_FALSE, with zeros."""
-    x_ = ctypes.c_float()
-    y_ = ctypes.c_float()
-    width_ = ctypes.c_float()
-    height_ = ctypes.c_float()
-    result = _lib.Rwindow_get_watermark_rect(window, ctypes.byref(x_), ctypes.byref(y_), ctypes.byref(width_), ctypes.byref(height_))
-    return (result, x_.value, y_.value, width_.value, height_.value)
 
 
 _lib.Rwindow_inject_mouse_move.argtypes = [ctypes.c_uint32, ctypes.c_float, ctypes.c_float]

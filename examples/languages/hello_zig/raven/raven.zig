@@ -1347,9 +1347,6 @@ pub extern fn Rinit_ex(desc: ?*const RInitDesc) c_int;
 /// render threads and releases the backend.
 pub extern fn Rshutdown() void;
 pub extern fn Ris_initialized() c_int;
-/// @deprecated Raven no longer has editions: it is open source (Apache
-/// License 2.0) and never shows a watermark. Always R_FALSE.
-pub extern fn Ris_free_edition() c_int;
 /// Returns: The library version, e.g. "0.1.0".
 pub extern fn Rget_version() ?[*:0]const u8;
 /// Replaces the allocator of Raven with the functions of the
@@ -1570,8 +1567,6 @@ pub extern fn Rwindow_get_focused_widget(window: Rid) Rid;
 /// Deepest widget under the cursor, or R_INVALID_ID.
 pub extern fn Rwindow_get_hovered_widget(window: Rid) Rid;
 pub extern fn Rwindow_get_mouse_position(window: Rid, x: ?*f32, y: ?*f32) void;
-/// @deprecated Raven no longer shows a watermark. Always R_FALSE, with zeros.
-pub extern fn Rwindow_get_watermark_rect(window: Rid, x: ?*f32, y: ?*f32, width: ?*f32, height: ?*f32) c_int;
 /// Inject input as if it came from the OS. Positions are in logical units.
 /// Useful for automated tests, replays and when Raven is driven by a host
 /// application.

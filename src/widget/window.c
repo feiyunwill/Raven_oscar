@@ -2546,22 +2546,3 @@ void rvn_windows_throttle(void) {
 		if (window && rvn_window_wants_frame(window)) rvn_renderer_throttle(&window->frames_in_flight, RVN_MAX_FRAMES_IN_FLIGHT);
 	}
 }
-
-/* ---------------------------------------------------------------------------
- *  Deprecated: Raven no longer has editions nor a watermark (it is open source,
- *  Apache License 2.0). Kept so that programs and bindings built against older
- *  versions still compile and link.
- * ------------------------------------------------------------------------- */
-
-int Ris_free_edition(void) {
-	return R_FALSE;
-}
-
-int Rwindow_get_watermark_rect(Rid id, float* x, float* y, float* width, float* height) {
-	(void)id;
-	if (x) *x = 0.0f;
-	if (y) *y = 0.0f;
-	if (width) *width = 0.0f;
-	if (height) *height = 0.0f;
-	return R_FALSE;
-}

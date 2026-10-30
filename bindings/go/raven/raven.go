@@ -895,12 +895,6 @@ func IsInitialized() int {
 	return int(C.Ris_initialized())
 }
 
-// IsFreeEdition: @deprecated Raven no longer has editions: it is open source (Apache License 2.0) and never
-// shows a watermark. Always R_FALSE.
-func IsFreeEdition() int {
-	return int(C.Ris_free_edition())
-}
-
 // GetVersion: Returns: The library version, e.g. "0.1.0".
 func GetVersion() string {
 	return C.GoString(C.Rget_version())
@@ -1281,20 +1275,6 @@ func WindowGetMousePosition(window ID) (x float32, y float32) {
 	C.Rwindow_get_mouse_position(C.Rid(window), &x_, &y_)
 	x = float32(x_)
 	y = float32(y_)
-	return
-}
-
-// WindowGetWatermarkRect: @deprecated Raven no longer shows a watermark. Always R_FALSE, with zeros.
-func WindowGetWatermarkRect(window ID) (result int, x float32, y float32, width float32, height float32) {
-	var x_ C.float
-	var y_ C.float
-	var width_ C.float
-	var height_ C.float
-	result = int(C.Rwindow_get_watermark_rect(C.Rid(window), &x_, &y_, &width_, &height_))
-	x = float32(x_)
-	y = float32(y_)
-	width = float32(width_)
-	height = float32(height_)
 	return
 }
 

@@ -2310,13 +2310,6 @@ namespace Raven
         public static extern int Ris_initialized();
 
         /// <summary>
-        /// @deprecated Raven no longer has editions: it is open source (Apache
-        /// License 2.0) and never shows a watermark. Always R_FALSE.
-        /// </summary>
-        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
-        public static extern int Ris_free_edition();
-
-        /// <summary>
         /// Returns: The library version, e.g. "0.1.0".
         /// </summary>
         [DllImport(Lib, EntryPoint = "Rget_version", CallingConvention = CallingConvention.Cdecl)]
@@ -2865,12 +2858,6 @@ namespace Raven
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         public static extern void Rwindow_get_mouse_position(uint window, out float x, out float y);
-
-        /// <summary>
-        /// @deprecated Raven no longer shows a watermark. Always R_FALSE, with zeros.
-        /// </summary>
-        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
-        public static extern int Rwindow_get_watermark_rect(uint window, out float x, out float y, out float width, out float height);
 
         /// <summary>
         /// Inject input as if it came from the OS. Positions are in logical units.
