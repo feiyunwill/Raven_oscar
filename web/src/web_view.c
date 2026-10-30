@@ -910,6 +910,10 @@ void Rweb_view_load_html(Rid widget, const char* html, const char* base_url) {
 	rw_text_puts(&page, html ? html : "");
 	/* an empty page, then the text written into it as a page that loads would be: its scripts run */
 	rw_view_send(view, "Page.navigate", "{\"url\":\"about:blank\"}", RW_KIND_NONE, NULL, NULL);
+	/* The bridge is set up here as well: recent Chromium does not run the scripts of
+	   Page.addScriptToEvaluateOnNewDocument for an about:blank that replaces about:blank,
+	   so the page written below would find no window.raven (issue #10). */
+	rw_text_puts(&script, g_rw_bridge);
 	rw_text_puts(&script, "(function(html){ document.open(); document.write(html); document.close(); })(");
 	rw_text_json(&script, page.data ? page.data : "");
 	rw_text_puts(&script, ")");

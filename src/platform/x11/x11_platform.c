@@ -542,9 +542,31 @@ static float rvn_x11_window_get_scale(rvn_pwindow_t* window) {
 	return g_x11.scale;
 }
 
+static void rvn_x11_process(XEvent* xevent);
+static int rvn_x11_wait_event(Window window, int type, XEvent* event, int timeout_ms);
+
 static void rvn_x11_window_show(rvn_pwindow_t* window, int visible) {
-	if (visible) XMapRaised(g_x11.display, window->handle);
-	else XWithdrawWindow(g_x11.display, window->handle, g_x11.screen);
+	if (visible) {
+		XWindowAttributes attributes;
+		int was_mapped = XGetWindowAttributes(g_x11.display, window->handle, &attributes) && attributes.map_state != IsUnmapped;
+		XMapRaised(g_x11.display, window->handle);
+		XFlush(g_x11.display);
+		/*
+		 * The window manager may place and resize the window before it maps it (XWayland
+		 * with a scaled output does). Wait for it, so that the first frame is drawn at the
+		 * size the window really has and not at the one asked: otherwise that first frame
+		 * shows, then the window jumps to the right size (issue #8). Bounded: a window
+		 * manager that never answers costs a fifth of a second, once.
+		 */
+		if (!was_mapped && rvn_x11_has_window_manager()) {
+			XEvent event;
+			if (rvn_x11_wait_event(window->handle, MapNotify, &event, 200)) {
+				while (XCheckTypedWindowEvent(g_x11.display, window->handle, ConfigureNotify, &event)) rvn_x11_process(&event);
+			}
+		}
+		return;
+	}
+	XWithdrawWindow(g_x11.display, window->handle, g_x11.screen);
 	XFlush(g_x11.display);
 }
 
