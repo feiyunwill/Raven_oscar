@@ -65,6 +65,14 @@ typedef struct rw_view_t {
 	char* url;
 	char* title;
 	int loading;
+	/** Something was asked to be shown: until then the view holds the empty page it was created with. */
+	int has_page;
+	/**
+	 * The script that writes a page given as text, held until the empty page
+	 * asked before it has finished loading (html_started: it began to).
+	 */
+	char* html_write;
+	int html_started;
 	/** Entries of the history to go back and forward to, or -1. */
 	int back_entry, forward_entry;
 	/** What the browser was last told about the size of the page. */
@@ -214,6 +222,13 @@ static void rw_view_script(rw_view_t* view, const char* script, rw_kind_t kind, 
 	rw_text_puts(&params, ",\"returnByValue\":true,\"awaitPromise\":true,\"userGesture\":true}");
 	rw_view_send(view, "Runtime.evaluate", params.data, kind, callback, user);
 	rw_text_free(&params);
+}
+
+/* Forgets a page given as text that was not written yet (another page was asked meanwhile). */
+static void rw_view_drop_html(rw_view_t* view) {
+	rw_free(view->html_write);
+	view->html_write = NULL;
+	view->html_started = 0;
 }
 
 /* Tells the browser how large the page is shown. */
@@ -398,11 +413,20 @@ static void rw_answer(rw_view_t* view, rw_request_t* request, const rw_json_t* m
 
 static void rw_event(rw_view_t* view, const char* method, const rw_json_t* params) {
 	if (strcmp(method, "Page.frameStartedLoading") == 0) {
+		if (view->html_write && view->target && strcmp(rw_json_string(params, "frameId", ""), view->target) == 0) view->html_started = 1;
 		if (view->target && strcmp(rw_json_string(params, "frameId", ""), view->target) == 0 && !view->loading) {
 			view->loading = 1;
 			rw_view_notify(view, R_WEB_EVENT_LOADING);
 		}
 	} else if (strcmp(method, "Page.frameStoppedLoading") == 0) {
+		if (view->html_write && view->html_started && view->target && strcmp(rw_json_string(params, "frameId", ""), view->target) == 0) {
+			/* the empty page is there: the page given as text can be written into it */
+			char* script = view->html_write;
+			view->html_write = NULL;
+			view->html_started = 0;
+			rw_view_script(view, script, RW_KIND_NONE, NULL, NULL);
+			rw_free(script);
+		}
 		if (view->target && strcmp(rw_json_string(params, "frameId", ""), view->target) == 0 && view->loading) {
 			view->loading = 0;
 			rw_view_send(view, "Page.getNavigationHistory", NULL, RW_KIND_HISTORY, NULL, NULL);
@@ -834,6 +858,7 @@ static void rw_view_destroyed(Rid widget, void* user_data) {
 	rw_free(view->session);
 	rw_free(view->url);
 	rw_free(view->title);
+	rw_free(view->html_write);
 	rw_free(view);
 	/* the browser only runs while there is something to show */
 	if (!g_rw_views) rw_browser_stop();
@@ -880,6 +905,8 @@ void Rweb_view_load_url(Rid widget, const char* url) {
 	rw_view_t* view = rw_view_checked(widget, "Rweb_view_load_url");
 	rw_text_t params;
 	if (!view) return;
+	rw_view_drop_html(view);
+	view->has_page = 1;
 	memset(&params, 0, sizeof(params));
 	rw_text_puts(&params, "{\"url\":");
 	rw_text_json(&params, url && url[0] ? url : "about:blank");
@@ -908,8 +935,6 @@ void Rweb_view_load_html(Rid widget, const char* html, const char* base_url) {
 		rw_text_puts(&page, "\">");
 	}
 	rw_text_puts(&page, html ? html : "");
-	/* an empty page, then the text written into it as a page that loads would be: its scripts run */
-	rw_view_send(view, "Page.navigate", "{\"url\":\"about:blank\"}", RW_KIND_NONE, NULL, NULL);
 	/* The bridge is set up here as well: recent Chromium does not run the scripts of
 	   Page.addScriptToEvaluateOnNewDocument for an about:blank that replaces about:blank,
 	   so the page written below would find no window.raven (issue #10). */
@@ -917,14 +942,31 @@ void Rweb_view_load_html(Rid widget, const char* html, const char* base_url) {
 	rw_text_puts(&script, "(function(html){ document.open(); document.write(html); document.close(); })(");
 	rw_text_json(&script, page.data ? page.data : "");
 	rw_text_puts(&script, ")");
-	rw_view_script(view, script.data, RW_KIND_NONE, NULL, NULL);
+	rw_view_drop_html(view);
+	if (!view->has_page) {
+		/* the view still holds the empty page it was created with: the text is written into it */
+		view->has_page = 1;
+		rw_view_script(view, script.data, RW_KIND_NONE, NULL, NULL);
+	} else {
+		/*
+		 * Another page is shown: an empty one first, then the text written into it as a
+		 * page that loads would be (its scripts run). The text waits until the empty page
+		 * has finished loading: written while it is still being committed, it crashes the
+		 * page of recent Chromium ("The page stopped working.").
+		 */
+		view->html_write = script.data;
+		script.data = NULL;
+		rw_view_send(view, "Page.navigate", "{\"url\":\"about:blank\"}", RW_KIND_NONE, NULL, NULL);
+	}
 	rw_text_free(&page);
 	rw_text_free(&script);
 }
 
 void Rweb_view_reload(Rid widget) {
 	rw_view_t* view = rw_view_checked(widget, "Rweb_view_reload");
-	if (view) rw_view_send(view, "Page.reload", NULL, RW_KIND_NONE, NULL, NULL);
+	if (!view) return;
+	rw_view_drop_html(view);
+	rw_view_send(view, "Page.reload", NULL, RW_KIND_NONE, NULL, NULL);
 }
 
 void Rweb_view_stop(Rid widget) {
@@ -935,6 +977,7 @@ void Rweb_view_stop(Rid widget) {
 static void rw_view_history(rw_view_t* view, int entry) {
 	char params[64];
 	if (entry < 0) return;
+	rw_view_drop_html(view);
 	snprintf(params, sizeof(params), "{\"entryId\":%d}", entry);
 	rw_view_send(view, "Page.navigateToHistoryEntry", params, RW_KIND_NONE, NULL, NULL);
 }
