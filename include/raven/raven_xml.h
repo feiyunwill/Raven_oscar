@@ -141,34 +141,6 @@ extern "C" {
 	RAVEN_API Rid Rwidget_create_from_xml(const char* xml, size_t size);
 	RAVEN_API Rid Rwidget_create_from_xml_file(const char* path);
 
-	/* -----------------------------------------------------------------------
-	 *  Compiled interfaces (ravenc)
-	 *
-	 *  ravenc turns an .xmlc file into C: the elements become a table of
-	 *  RXmlCompiledNode, built by the functions below without reading any
-	 *  XML at run time. They give the same result as the same XML loaded
-	 *  with Rwindow_create_from_xml. Written by ravenc, rarely by hand.
-	 * --------------------------------------------------------------------- */
-
-	typedef struct RXmlCompiledNode {
-		/** Tag of the element ("VBox", "Button", "Item"...). */
-		const char* tag;
-		/** Its text content ("" when none). */
-		const char* text;
-		/** name, value, name, value... (attribute_count pairs). */
-		const char* const* attributes;
-		int attribute_count;
-		/** Index of the parent in the table, -1 for the root. The table lists a parent before its children, children in order. */
-		int parent;
-		/** Line in the source file, for the errors. */
-		int line;
-	} RXmlCompiledNode;
-
-	/** @brief Builds the window described by a compiled table whose root is <Window>. `source` names the file in the errors. */
-	RAVEN_API Rid Rwindow_create_from_compiled(const RXmlCompiledNode* nodes, int count, const char* source);
-	/** @brief Builds the widget tree described by a compiled table. */
-	RAVEN_API Rid Rwidget_create_from_compiled(const RXmlCompiledNode* nodes, int count, const char* source);
-
 	/**
 	 * @brief Folder used to resolve relative paths found in XML (Source="...",
 	 * Font="..."). The *FromXmlFile functions use the folder of the file.

@@ -1,12 +1,12 @@
 /**
  * Raven Designer - the IDE of Raven: projects built with CMake, interfaces
- * edited visually (.xml and .xmlc, the interface with its C), code editors
- * with completion, translations, build and run.
+ * edited visually (.xml), code editors with completion, translations, build
+ * and run.
  *
- *   raven_designer [project folder | file.xml | file.xmlc]
+ *   raven_designer [project folder | file.xml]
  *
- * The other files: ide.h says what each one does (project, editors, xmlc,
- * build, strings, os). This one is the visual editor of an interface.
+ * The other files: ide.h says what each one does (project, editors, build,
+ * strings, os). This one is the visual editor of an interface.
  *
  * The window shows the same document five ways, all kept in step:
  *
@@ -420,35 +420,6 @@ Rid g_ide_window = R_INVALID_ID;
 Rid g_ide_dock = R_INVALID_ID;
 Rid g_ide_center = R_INVALID_ID;
 Rid g_ide_dialog = R_INVALID_ID;
-/* the interface shown is the one of an .xmlc: saving goes through xmlc.c */
-static int g_is_xmlc = 0;
-/*
- * An .xmlc is in the XML panel whole, scripts included: the visual editor
- * works on its interface element, which starts on line g_iface_offset + 1
- * of the file. The lines of the document are lines of that element.
- */
-static int g_iface_offset = 0;
-
-/* The interface of a text: the text itself, or for an .xmlc its interface element (malloc), NULL when there is none. */
-static char* interface_of(const char* text, size_t* start, size_t* end) {
-	char* out;
-	int line = 1;
-	*start = 0;
-	*end = strlen(text);
-	if (!g_is_xmlc) {
-		g_iface_offset = 0;
-		out = (char*)malloc(*end + 1);
-		memcpy(out, text, *end + 1);
-		return out;
-	}
-	if (xmlc_find_interface(text, start, end, &line) <= 0) return NULL;
-	g_iface_offset = line - 1;
-	out = (char*)malloc(*end - *start + 1);
-	memcpy(out, text + *start, *end - *start);
-	out[*end - *start] = '\0';
-	return out;
-}
-
 /* ---------------------------------------------------------------------------
  *  Small things
  * ------------------------------------------------------------------------- */
@@ -535,16 +506,6 @@ static void add_problem(const char* text, int line, int error) {
 	if (g.problem_count >= MAX_PROBLEMS) return;
 	problem = &g.problems[g.problem_count++];
 	snprintf(problem->text, sizeof(problem->text), "%s", text);
-	/* (in an .xmlc, the lines of the interface are lines of the file: "line 3" of the element is said as the line of the file) */
-	if (g_iface_offset > 0 && line > 0) {
-		const char* at = strstr(text, "line ");
-		if (at && at[5] >= '0' && at[5] <= '9') {
-			const char* digits = at + 5;
-			while (*digits >= '0' && *digits <= '9') digits++;
-			snprintf(problem->text, sizeof(problem->text), "%.*sline %d%s", (int)(at - text), text, line + g_iface_offset, digits);
-		}
-		line += g_iface_offset;
-	}
 	problem->line = line;
 	problem->error = error;
 }
@@ -831,24 +792,6 @@ static void on_tree_selected(Rid tree, Rid item, void* user_data) {
 static void document_changed(int keep_inspector) {
 	const char* text = Rxml_document_to_string(g.document);
 	int line = g.selected != R_INVALID_ID && Rxml_node_is_valid(g.selected) ? Rxml_node_get_line(g.selected) : 0;
-	ide_buffer_t whole = { 0 };
-	if (g_is_xmlc) {
-		/* the element goes back in its place in the file, the scripts and the rest as they are */
-		const char* current = Rtext_editor_get_text(g.source);
-		size_t start, end, length = strlen(text);
-		char* old = interface_of(current, &start, &end);
-		while (length && (text[length - 1] == '\n' || text[length - 1] == '\r')) length--;
-		if (old) {
-			ide_buffer_add(&whole, current, start);
-			ide_buffer_add(&whole, text, length);
-			ide_buffer_add(&whole, current + end, strlen(current + end));
-			free(old);
-		} else {
-			ide_buffer_add(&whole, text, strlen(text));
-		}
-		text = whole.data ? whole.data : "";
-		if (line > 0) line += g_iface_offset;
-	}
 	g.syncing++;
 	Rtext_editor_set_text(g.source, text);
 	/* the text stays on what is being changed */
@@ -860,7 +803,6 @@ static void document_changed(int keep_inspector) {
 	g.broken = R_FALSE;
 	g.modified = R_TRUE;
 	history_push(text, R_FALSE);
-	ide_buffer_free(&whole);
 	rebuild_all(keep_inspector);
 	update_title();
 }
@@ -1108,7 +1050,6 @@ static void select_node(Rid node, int reveal) {
 	Rwidget_invalidate(g.outline);
 	/* the text shows where the element is written */
 	line = node != R_INVALID_ID ? Rxml_node_get_line(node) : 0;
-	if (line > 0) line += g_iface_offset;
 	if (reveal && line > 0 && !g.broken && !Rwidget_is_focused(g.source)) {
 		Rtext_editor_set_cursor(g.source, line - 1, 0);
 		Rtext_editor_scroll_to_line(g.source, line - 1);
@@ -1133,22 +1074,10 @@ static void rebuild_all(int keep_inspector) {
  */
 static int load_text(const char* text, int record) {
 	RXmlError error;
-	size_t start, end;
-	char* ui = interface_of(text, &start, &end);
 	Rid document;
 	int path[32], depth = -1;
 
-	if (!ui) {
-		g.broken = R_TRUE;
-		g.problem_count = 0;
-		g_iface_offset = 0;
-		add_problem("The file has no interface element (or one that is not closed): write one, as <Window>...</Window>.", 1, R_TRUE);
-		show_problems();
-		set_status("No interface in the file: see the Problems tab.");
-		return R_FALSE;
-	}
-	document = Rxml_document_parse(ui, strlen(ui), &error);
-	free(ui);
+	document = Rxml_document_parse(text, strlen(text), &error);
 	if (document == R_INVALID_ID) {
 		char message[240];
 		g.broken = R_TRUE;
@@ -1468,7 +1397,7 @@ int ide_confirm_unsaved(const char* why) {
 		return R_TRUE;
 	}
 	/* (an interface never saved asks where; refusing there cancels) */
-	if (interface && !save_file(!g.path && !g_is_xmlc)) return R_FALSE;
+	if (interface && !save_file(!g.path)) return R_FALSE;
 	if (editors_any_modified() && !editors_save_all()) return R_FALSE;
 	if (strings_any_modified() && !strings_save()) return R_FALSE;
 	return R_TRUE;
@@ -1562,8 +1491,6 @@ static void open_file(const char* path) {
 		return;
 	}
 	base_path_of(path);
-	g_is_xmlc = 0;
-	g_iface_offset = 0;
 	Rdock_area_set_panel_title(g.dock, g.source, "XML");
 	Rtext_editor_set_language(g.source, "XML");
 	new_document(text, path);
@@ -1575,15 +1502,6 @@ static int save_file(int ask) {
 	static const RFileFilter filters[] = { { "XML", "*.xml" }, { "All files", "*" } };
 	const char* text;
 	if (!g.has_document) return R_TRUE;
-	/* an .xmlc is written with its scripts */
-	if (g_is_xmlc && !ask) {
-		int ok = xmlc_save();
-		if (ok) {
-			g.modified = R_FALSE;
-			update_title();
-		}
-		return ok;
-	}
 	if (ask || !g.path) {
 		RFileDialogDesc desc;
 		const char* chosen;
@@ -1599,22 +1517,6 @@ static int save_file(int ask) {
 		chosen = copy_text(chosen);
 		free(g.path);
 		g.path = (char*)chosen;
-		/* saved as a plain .xml: the interface alone, the scripts stay in the .xmlc */
-		if (g_is_xmlc) {
-			size_t start, end;
-			char* ui = interface_of(Rtext_editor_get_text(g.source), &start, &end);
-			xmlc_close();
-			g_is_xmlc = 0;
-			g_iface_offset = 0;
-			if (ui) {
-				g.syncing++;
-				Rtext_editor_set_text(g.source, ui);
-				g.syncing--;
-				free(ui);
-			}
-			Rdock_area_set_panel_title(g.dock, g.source, "XML");
-	Rtext_editor_set_language(g.source, "XML");
-		}
 	}
 	/* what is saved is the text as it is written, mistakes included: nothing typed is lost */
 	text = Rtext_editor_get_text(g.source);
@@ -1629,18 +1531,12 @@ static int save_file(int ask) {
 }
 
 static void action_file(Rid sender, const char* action, void* user_data) {
-	static const RFileFilter filters[] = { { "Interfaces", "*.xml;*.xmlc;*.xmlc++;*.xmlcpp;*.xmlrs;*.xmlpy;*.xmlgo;*.xmlcs;*.xmlzig;*.xmllua" },
-		{ "XML", "*.xml" }, { "XML with code", "*.xmlc;*.xmlc++;*.xmlcpp;*.xmlrs;*.xmlpy;*.xmlgo;*.xmlcs;*.xmlzig;*.xmllua" }, { "All files", "*" } };
+	static const RFileFilter filters[] = { { "Interfaces", "*.xml" }, { "All files", "*" } };
 	(void)sender;
 	(void)user_data;
 	if (strncmp(action, "file.new.", 9) == 0) {
 		const char* kind = action + 9;
 		if (!confirm_discard()) return;
-		if (g_is_xmlc) {
-			xmlc_close();
-			g_is_xmlc = 0;
-			g_iface_offset = 0;
-		}
 		new_document(strcmp(kind, "panel") == 0 ? TEMPLATE_PANEL : strcmp(kind, "form") == 0 ? TEMPLATE_FORM : TEMPLATE_WINDOW, NULL);
 		set_status("New document: File > Save writes it.");
 	} else if (strcmp(action, "file.welcome") == 0) {
@@ -1654,7 +1550,7 @@ static void action_file(Rid sender, const char* action, void* user_data) {
 		desc.parent = g.window;
 		desc.title = "Open an interface";
 		desc.filters = filters;
-		desc.filter_count = 4;
+		desc.filter_count = 2;
 		chosen = Rfile_dialog_open(&desc);
 		if (chosen) {
 			char* path = copy_text(chosen);
@@ -1668,7 +1564,7 @@ static void action_file(Rid sender, const char* action, void* user_data) {
 	} else if (strcmp(action, "file.save_as") == 0) {
 		save_file(R_TRUE);
 	} else if (strcmp(action, "file.save_all") == 0) {
-		if (g.modified && (g.path || g_is_xmlc)) save_file(R_FALSE);
+		if (g.modified && g.path) save_file(R_FALSE);
 		editors_save_all();
 		strings_save();
 		set_status("Everything is saved.");
@@ -1703,13 +1599,10 @@ static int on_drop(Rid target, const RDropEvent* event, void* user_data) {
  *  What the rest of the IDE asks the visual editor (ide.h)
  * ------------------------------------------------------------------------- */
 
-void designer_load_interface(const char* text, const char* path, int is_xmlc) {
+void designer_load_interface(const char* text, const char* path) {
 	if (path) base_path_of(path);
-	g_is_xmlc = is_xmlc;
-	/* (the panel says that it holds the interface part of the file) */
-	Rdock_area_set_panel_title(g.dock, g.source, is_xmlc && path ? ide_basename(path) : "XML");
-	/* an .xmlc: its code colored in the language of the file (XMLC, XMLRS, XMLPY... of the text editor) */
-	Rtext_editor_set_language(g.source, is_xmlc && path && Rlanguage_for_file(path) ? Rlanguage_for_file(path) : "XML");
+	Rdock_area_set_panel_title(g.dock, g.source, "XML");
+	Rtext_editor_set_language(g.source, "XML");
 	new_document(text, path);
 	if (!g.broken && path) set_status("Opened %s", path);
 }
@@ -1741,7 +1634,7 @@ void designer_set_modified(int modified) {
 
 int designer_save(void) {
 	if (!g.has_document) return R_TRUE;
-	if (!g.path && !g_is_xmlc) return save_file(R_TRUE);
+	if (!g.path) return save_file(R_TRUE);
 	return save_file(R_FALSE);
 }
 
@@ -1756,9 +1649,6 @@ int designer_has_document(void) {
 void designer_close(void) {
 	if (g.parse_timer != R_INVALID_ID && Rtimer_is_valid(g.parse_timer)) Rtimer_destroy(g.parse_timer);
 	g.parse_timer = R_INVALID_ID;
-	if (xmlc_is_open()) xmlc_close();
-	g_is_xmlc = 0;
-	g_iface_offset = 0;
 	free(g.path);
 	g.path = NULL;
 	history_clear();
@@ -1901,14 +1791,14 @@ static void action_view(Rid sender, const char* action, void* user_data) {
 	} else if (strcmp(action, "view.preview") == 0) {
 		/* the interface of the code editor in front */
 		const char* path = editors_current_path();
-		if (path && (ide_interface_language(path) || ide_iequal(ide_extension(path), "xml"))) {
+		if (path && ide_iequal(ide_extension(path), "xml")) {
 			char* copy = copy_text(path);
 			ide_preview_file(copy);
 			free(copy);
 		} else if (g.has_document) {
 			Rdock_area_open_panel(g.dock, g_ide_center);
 		} else {
-			set_status("The file in front is not an interface (.xml, .xmlc, .xmlrs...): nothing to preview.");
+			set_status("The file in front is not an interface (.xml): nothing to preview.");
 		}
 	} else if (strcmp(action, "view.preview.close") == 0) {
 		designer_close_preview();
@@ -1936,7 +1826,6 @@ int designer_close_preview(void) {
 		modified = R_FALSE;
 	}
 	path = copy_text(g.path);
-	/* (the whole file: an .xmlc is whole in the XML panel) */
 	text = copy_text(Rtext_editor_get_text(g.source));
 	designer_close();
 	editors_open_text(path, text, modified);
@@ -2427,7 +2316,7 @@ int main(int argc, char** argv) {
 		} else if (strcmp(argv[i], "--capture") == 0 && i + 1 < argc) {
 			capture_path = argv[++i];
 		} else if (argv[i][0] == '-') {
-			fprintf(stderr, "usage: raven_designer [project folder | file.xml | file.xmlc] [--null | --headless] [--frames N] [--script \"...\"] [--capture file.ppm]\n");
+			fprintf(stderr, "usage: raven_designer [project folder | file.xml] [--null | --headless] [--frames N] [--script \"...\"] [--capture file.ppm]\n");
 			return 2;
 		} else {
 			file = argv[i];
@@ -2477,7 +2366,6 @@ int main(int argc, char** argv) {
 	drawer_shutdown();
 	accessibility_shutdown();
 	welcome_shutdown();
-	if (xmlc_is_open()) xmlc_close();
 	strings_shutdown();
 	editors_shutdown();
 	project_shutdown();

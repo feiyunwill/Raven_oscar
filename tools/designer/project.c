@@ -4,8 +4,8 @@
  * Cargo (Rust), go (Go), dotnet (C#), zig build (Zig), or nothing to build
  * (Python, Lua). The content drawer (Ctrl+Space) shows its files; each opens where it belongs.
  * New project writes one that builds as it is, of one of two kinds: with a
- * Raven interface (its interface with its code in main.xmlc, main.xmlrs...,
- * what its tools need, and strings.csv), or native (what the tools of its
+ * Raven interface (main.xml, the program that loads it in its language, what
+ * its tools need, and strings.csv), or native (what the tools of its
  * language need and a classic Hello world, nothing of Raven).
  * The settings of the IDE for a project are in its file .raven-ide.
  */
@@ -124,7 +124,7 @@ static int in_visual_editor(const char* path) {
 }
 
 static int is_interface_file(const char* path) {
-	return ide_interface_language(path) != NULL || ide_iequal(ide_extension(path), "xml");
+	return ide_iequal(ide_extension(path), "xml");
 }
 
 void ide_open_file(const char* path, int line) {
@@ -135,7 +135,7 @@ void ide_open_file(const char* path, int line) {
 	}
 	welcome_hide();
 	if (is_interface_file(path) && in_visual_editor(path)) {
-		/* it is in the preview: there it is edited (an .xmlc is whole in its XML panel, a line of the file is a line of the panel) */
+		/* it is in the preview: there it is edited (a line of the file is a line of its XML panel) */
 		Rdock_area_open_panel(g_ide_dock, g_ide_center);
 		if (line > 0) designer_go_to_line(line);
 	} else if (is_interface_file(path)) {
@@ -171,14 +171,9 @@ void ide_preview_file(const char* path) {
 			modified = editors_is_modified(editor);
 			editors_close_file(path);
 		}
-		if (ide_interface_language(path)) {
-			ok = xmlc_open_text(path, text);
-		} else {
-			if (xmlc_is_open()) xmlc_close();
-			if (text) designer_load_interface(text, path, R_FALSE);
-			else designer_open_file(path);
-			ok = designer_has_document();
-		}
+		if (text) designer_load_interface(text, path);
+		else designer_open_file(path);
+		ok = designer_has_document();
 		free(text);
 		if (!ok) return;
 		if (modified) designer_set_modified(R_TRUE);
@@ -189,6 +184,11 @@ void ide_preview_file(const char* path) {
 
 /* ---------------------------------------------------------------------------
  *  Templates of a new project, one per language
+ *
+ *  The interface is main.xml, the same in every language: the program loads
+ *  it when it starts (Rwindow_create_from_xml_file), binds the action of its
+ *  button (Raction_bind) and finds its widgets by name (Rwidget_find). Save
+ *  main.xml while the program runs and its window follows (live reload).
  *
  *  {{NAME}} is the name of the project, {{BINDINGS}} the folder of the
  *  bindings of Raven (share/raven/bindings in a package).
@@ -202,13 +202,13 @@ static const char TEMPLATE_STRINGS[] =
 "clicks.one,{n} click,{n} clic\n"
 "clicks.other,{n} clicks,{n} clics\n";
 
-/* the interface, the same in every language: {{CALLBACK}} is the name of the function */
 static const char TEMPLATE_WINDOW_XML[] =
+"<!-- {{NAME}}: the interface. The program loads it when it starts; save it while the program runs and the window follows. -->\n"
 "<Window Title=\"{{NAME}}\" Width=\"480\" Height=\"320\">\n"
 "\t<VBox Spacing=\"12\" Slot.Padding=\"24\">\n"
 "\t\t<Label Text=\"@hello.title\" TextSize=\"24\"/>\n"
 "\t\t<Label Name=\"status\" Text=\"@hello.none\" Opacity=\"0.7\"/>\n"
-"\t\t<Button Text=\"@hello.button\" Style=\"Primary\" OnClicked=\"{{{CALLBACK}}}\" Slot.HAlign=\"Left\"/>\n"
+"\t\t<Button Text=\"@hello.button\" Style=\"Primary\" OnClicked=\"hello.clicked\" Slot.HAlign=\"Left\"/>\n"
 "\t</VBox>\n"
 "</Window>\n";
 
@@ -219,70 +219,68 @@ static const char TEMPLATE_CMAKE[] =
 "# Raven: the package (bin/, include/, lib/). The IDE gives its folder in CMAKE_PREFIX_PATH.\n"
 "find_package(raven REQUIRED)\n"
 "\n"
-"# {{MAIN}} holds the interface and its code: ravenc turns it into {{LANGUAGE}} (raven_target_xmlc)\n"
-"add_executable({{NAME}} {{MAIN}} strings.csv)\n"
+"# main.xml (the interface) and strings.csv (the translations) are read when the program\n"
+"# runs, from its working folder: the IDE runs it in the folder of the project.\n"
+"add_executable({{NAME}} {{MAIN}} main.xml strings.csv)\n"
 "target_link_libraries({{NAME}} PRIVATE raven::raven)\n"
-"raven_target_xmlc({{NAME}})\n"
 "if(MSVC)\n"
 "\ttarget_compile_definitions({{NAME}} PRIVATE _CRT_SECURE_NO_WARNINGS)\n"
 "endif()\n";
 
-static const char SCRIPT_C[] =
-"<!-- {{NAME}}: the interface and its C code, in one file. F5 builds and runs it. -->\n"
-"<script>\n"
-"#include <stdio.h>\n"
+static const char PROGRAM_C[] =
+"/*\n"
+" * {{NAME}}: the program. Its interface is main.xml, loaded when it starts:\n"
+" * save main.xml while it runs and the window follows. F5 builds and runs it.\n"
+" */\n"
+"#include <Raven.h>\n"
 "\n"
+"static Rid g_window = R_INVALID_ID;\n"
 "static int g_clicks = 0;\n"
 "\n"
-"/* OnClicked=\"{on_hello}\" below calls this function: the compiler checks it */\n"
+"/* OnClicked=\"hello.clicked\" in main.xml fires this action */\n"
 "static void on_hello(Rid sender, const char* action, void* user_data) {\n"
 "\t(void)sender;\n"
 "\t(void)action;\n"
 "\t(void)user_data;\n"
 "\tg_clicks++;\n"
-"\t/* ui.status: the widget with Name=\"status\" */\n"
-"\tRlabel_set_text(ui.status, Rtr_plural(\"clicks\", g_clicks));\n"
+"\t/* the widget with Name=\"status\" */\n"
+"\tRlabel_set_text(Rwidget_find(g_window, \"status\"), Rtr_plural(\"clicks\", g_clicks));\n"
 "}\n"
 "\n"
 "int main(void) {\n"
 "\tif (!Rinit(R_BACKEND_VULKAN)) return 1;\n"
 "\tRlocale_load_csv(\"strings.csv\");\n"
 "\tRlocale_set_language(Rlocale_get_system_language());\n"
-"\tmain_create();\n"
+"\tRaction_bind(\"hello.clicked\", on_hello, NULL);\n"
+"\tg_window = Rwindow_create_from_xml_file(\"main.xml\");\n"
 "\twhile (Rdraw_frame()) {}\n"
 "\tRshutdown();\n"
 "\treturn 0;\n"
-"}\n"
-"</script>\n"
-"\n";
+"}\n";
 
-static const char SCRIPT_CPP[] =
-"<!-- {{NAME}}: the interface and its C++ code, in one file. F5 builds and runs it. -->\n"
-"<script>\n"
-"#include <string>\n"
+static const char PROGRAM_CPP[] =
+"// {{NAME}}: the program. Its interface is main.xml, loaded when it starts:\n"
+"// save main.xml while it runs and the window follows. F5 builds and runs it.\n"
+"#include <Raven.h>\n"
 "\n"
+"static Rid g_window = R_INVALID_ID;\n"
 "static int g_clicks = 0;\n"
-"\n"
-"// OnClicked=\"{on_hello}\" below calls this function: the compiler checks it\n"
-"static void on_hello(Rid sender, const char* action) {\n"
-"\t(void)sender;\n"
-"\t(void)action;\n"
-"\tg_clicks++;\n"
-"\t// ui.status: the widget with Name=\"status\"\n"
-"\tRlabel_set_text(ui.status, Rtr_plural(\"clicks\", g_clicks));\n"
-"}\n"
 "\n"
 "int main() {\n"
 "\tif (!Rinit(R_BACKEND_VULKAN)) return 1;\n"
 "\tRlocale_load_csv(\"strings.csv\");\n"
 "\tRlocale_set_language(Rlocale_get_system_language());\n"
-"\tmain_create();\n"
+"\t// OnClicked=\"hello.clicked\" in main.xml fires this action\n"
+"\tRaction_bind(\"hello.clicked\", [](Rid, const char*, void*) {\n"
+"\t\tg_clicks++;\n"
+"\t\t// the widget with Name=\"status\"\n"
+"\t\tRlabel_set_text(Rwidget_find(g_window, \"status\"), Rtr_plural(\"clicks\", g_clicks));\n"
+"\t}, nullptr);\n"
+"\tg_window = Rwindow_create_from_xml_file(\"main.xml\");\n"
 "\twhile (Rdraw_frame()) {}\n"
 "\tRshutdown();\n"
 "\treturn 0;\n"
-"}\n"
-"</script>\n"
-"\n";
+"}\n";
 
 static const char CARGO_TOML[] =
 "[package]\n"
@@ -291,35 +289,12 @@ static const char CARGO_TOML[] =
 "edition = \"2021\"\n"
 "\n"
 "[dependencies]\n"
-"raven = { package = \"raven-gui\", path = \"{{BINDINGS}}/rust\" }\n"
-"\n"
-"[build-dependencies]\n"
-"raven-build = { package = \"raven-gui-build\", path = \"{{BINDINGS}}/rust-build\" }\n";
+"raven = { package = \"raven-gui\", path = \"{{BINDINGS}}/rust\" }\n";
 
-static const char CARGO_BUILD_RS[] =
-"// ravenc turns src/main.xmlrs into Rust ($OUT_DIR/main.xmlrs.rs)\n"
-"fn main() {\n"
-"    raven_build::compile(\"src/main.xmlrs\");\n"
-"}\n";
-
-static const char CARGO_MAIN_RS[] =
-"// The program is src/main.xmlrs: the interface and its Rust code.\n"
-"include!(concat!(env!(\"OUT_DIR\"), \"/main.xmlrs.rs\"));\n";
-
-static const char SCRIPT_RUST[] =
-"<!-- {{NAME}}: the interface and its Rust code, in one file. F5 builds and runs it. -->\n"
-"<script>\n"
+static const char PROGRAM_RUST[] =
+"// {{NAME}}: the program. Its interface is main.xml, loaded when it starts:\n"
+"// save main.xml while it runs and the window follows. F5 builds and runs it.\n"
 "use raven::*;\n"
-"use std::sync::atomic::{AtomicI32, Ordering};\n"
-"\n"
-"static CLICKS: AtomicI32 = AtomicI32::new(0);\n"
-"\n"
-"/// OnClicked=\"{on_hello}\" below calls this function: the compiler checks it\n"
-"fn on_hello(_sender: Rid, _action: &str) {\n"
-"    let clicks = CLICKS.fetch_add(1, Ordering::SeqCst) + 1;\n"
-"    // ui().status: the widget with Name=\"status\"\n"
-"    unsafe { Rlabel_set_text(ui().status, Rtr_plural(cstr(\"clicks\").as_ptr(), clicks)) };\n"
-"}\n"
 "\n"
 "fn main() {\n"
 "    unsafe {\n"
@@ -329,30 +304,37 @@ static const char SCRIPT_RUST[] =
 "        Rlocale_load_csv(cstr(\"strings.csv\").as_ptr());\n"
 "        Rlocale_set_language(Rlocale_get_system_language());\n"
 "    }\n"
-"    main_create();\n"
+"    let window = unsafe { Rwindow_create_from_xml_file(cstr(\"main.xml\").as_ptr()) };\n"
+"    let mut clicks = 0;\n"
+"    // OnClicked=\"hello.clicked\" in main.xml fires this action\n"
+"    action_bind(\"hello.clicked\", move |_sender, _action| {\n"
+"        clicks += 1;\n"
+"        // the widget with Name=\"status\"\n"
+"        unsafe { Rlabel_set_text(widget_find(window, \"status\"), Rtr_plural(cstr(\"clicks\").as_ptr(), clicks)) };\n"
+"    });\n"
 "    unsafe {\n"
 "        while Rdraw_frame() != 0 {}\n"
 "        Rshutdown();\n"
 "    }\n"
-"}\n"
-"</script>\n"
-"\n";
+"}\n";
 
-static const char SCRIPT_PYTHON[] =
-"<!-- {{NAME}}: the interface and its Python code, in one file. F5 runs it. -->\n"
-"<script>\n"
+static const char PROGRAM_PYTHON[] =
+"# {{NAME}}: the program. Its interface is main.xml, loaded when it starts:\n"
+"# save main.xml while it runs and the window follows. F5 runs it.\n"
 "import sys\n"
+"\n"
 "import raven as r\n"
 "\n"
+"window = r.R_INVALID_ID\n"
 "clicks = 0\n"
 "\n"
 "\n"
-"# OnClicked=\"{on_hello}\" below calls this function\n"
-"def on_hello(sender, action):\n"
+"def on_hello(sender, action, user_data):\n"
+"    \"\"\"OnClicked=\"hello.clicked\" in main.xml fires this action.\"\"\"\n"
 "    global clicks\n"
 "    clicks += 1\n"
-"    # ui.status: the widget with Name=\"status\"\n"
-"    r.Rlabel_set_text(ui.status, r.Rtr_plural(\"clicks\", clicks))\n"
+"    # the widget with Name=\"status\"\n"
+"    r.Rlabel_set_text(r.Rwidget_find(window, \"status\"), r.Rtr_plural(\"clicks\", clicks))\n"
 "\n"
 "\n"
 "if __name__ == \"__main__\":\n"
@@ -360,12 +342,11 @@ static const char SCRIPT_PYTHON[] =
 "        sys.exit(1)\n"
 "    r.Rlocale_load_csv(\"strings.csv\")\n"
 "    r.Rlocale_set_language(r.Rlocale_get_system_language())\n"
-"    main_create()\n"
+"    r.Raction_bind(\"hello.clicked\", on_hello)\n"
+"    window = r.Rwindow_create_from_xml_file(\"main.xml\")\n"
 "    while r.Rdraw_frame():\n"
 "        pass\n"
-"    r.Rshutdown()\n"
-"</script>\n"
-"\n";
+"    r.Rshutdown()\n";
 
 static const char GO_MOD[] =
 "module {{NAME}}\n"
@@ -376,41 +357,37 @@ static const char GO_MOD[] =
 "\n"
 "replace raven => {{BINDINGS}}/go\n";
 
-static const char GO_GENERATE[] =
+static const char PROGRAM_GO[] =
+"// {{NAME}}: the program. Its interface is main.xml, loaded when it starts:\n"
+"// save main.xml while it runs and the window follows. F5 builds and runs it.\n"
 "package main\n"
 "\n"
-"// ravenc turns main.xmlgo into Go (main.xmlgo.go): go generate, then go build\n"
-"//go:generate ravenc main.xmlgo -o main.xmlgo.go\n";
-
-static const char SCRIPT_GO[] =
-"<!-- {{NAME}}: the interface and its Go code, in one file. F5 builds and runs it. -->\n"
-"<script>\n"
-"package main\n"
+"import (\n"
+"\t\"runtime\"\n"
 "\n"
-"import \"raven/raven\"\n"
-"\n"
-"var clicks = 0\n"
-"\n"
-"// OnClicked=\"{on_hello}\" below calls this function: the compiler checks it\n"
-"func on_hello(sender raven.ID, action string) {\n"
-"\tclicks++\n"
-"\t// ui.status: the widget with Name=\"status\"\n"
-"\traven.LabelSetText(ui.status, raven.TrPlural(\"clicks\", clicks))\n"
-"}\n"
+"\t\"raven/raven\"\n"
+")\n"
 "\n"
 "func main() {\n"
+"\t// Raven belongs to the thread that starts it\n"
+"\truntime.LockOSThread()\n"
 "\tif raven.Init(raven.R_BACKEND_VULKAN) == 0 {\n"
 "\t\treturn\n"
 "\t}\n"
 "\traven.LocaleLoadCsv(\"strings.csv\")\n"
 "\traven.LocaleSetLanguage(raven.LocaleGetSystemLanguage())\n"
-"\tmain_create()\n"
+"\twindow := raven.WindowCreateFromXmlFile(\"main.xml\")\n"
+"\tclicks := 0\n"
+"\t// OnClicked=\"hello.clicked\" in main.xml fires this action\n"
+"\traven.ActionBind(\"hello.clicked\", func(sender raven.ID, action string) {\n"
+"\t\tclicks++\n"
+"\t\t// the widget with Name=\"status\"\n"
+"\t\traven.LabelSetText(raven.WidgetFind(window, \"status\"), raven.TrPlural(\"clicks\", clicks))\n"
+"\t})\n"
 "\tfor raven.DrawFrame() != 0 {\n"
 "\t}\n"
 "\traven.Shutdown()\n"
-"}\n"
-"</script>\n"
-"\n";
+"}\n";
 
 static const char CSPROJ[] =
 "<Project Sdk=\"Microsoft.NET.Sdk\">\n"
@@ -422,59 +399,54 @@ static const char CSPROJ[] =
 "  </PropertyGroup>\n"
 "  <ItemGroup>\n"
 "    <Compile Include=\"{{BINDINGS}}/csharp/Raven.cs\" Link=\"Raven.cs\" />\n"
+"    <None Update=\"main.xml\" CopyToOutputDirectory=\"PreserveNewest\" />\n"
 "    <None Update=\"strings.csv\" CopyToOutputDirectory=\"PreserveNewest\" />\n"
 "  </ItemGroup>\n"
-"  <!-- ravenc turns every .xmlcs of the project into C# before the compiler runs -->\n"
-"  <Import Project=\"{{BINDINGS}}/csharp/Raven.XmlCs.targets\" />\n"
 "</Project>\n";
 
-static const char SCRIPT_CSHARP[] =
-"<!-- {{NAME}}: the interface and its C# code, in one file. F5 builds and runs it. -->\n"
-"<script>\n"
+static const char PROGRAM_CSHARP[] =
+"// {{NAME}}: the program. Its interface is main.xml, loaded when it starts:\n"
+"// save main.xml while it runs and the window follows. F5 builds and runs it.\n"
+"using System;\n"
 "using Raven;\n"
-"\n"
-"public static partial class MainUi\n"
-"{\n"
-"    static int clicks;\n"
-"\n"
-"    // OnClicked=\"{OnHello}\" below calls this method: the compiler checks it\n"
-"    static void OnHello(uint sender, string action)\n"
-"    {\n"
-"        clicks++;\n"
-"        // status: the widget with Name=\"status\"\n"
-"        R.Rlabel_set_text(status, R.Rtr_plural(\"clicks\", clicks));\n"
-"    }\n"
-"}\n"
 "\n"
 "public static class Program\n"
 "{\n"
+"    static uint window;\n"
+"    static int clicks;\n"
+"\n"
+"    // OnClicked=\"hello.clicked\" in main.xml fires this action\n"
+"    static void OnHello(uint sender, IntPtr action, IntPtr userData)\n"
+"    {\n"
+"        clicks++;\n"
+"        // the widget with Name=\"status\"\n"
+"        R.Rlabel_set_text(R.Rwidget_find(window, \"status\"), R.Rtr_plural(\"clicks\", clicks));\n"
+"    }\n"
+"\n"
 "    public static int Main()\n"
 "    {\n"
 "        if (R.Rinit(RBackend.R_BACKEND_VULKAN) == 0) return 1;\n"
 "        R.Rlocale_load_csv(\"strings.csv\");\n"
 "        R.Rlocale_set_language(R.Rlocale_get_system_language());\n"
-"        MainUi.Create();\n"
+"        R.Raction_bind(\"hello.clicked\", R.Keep<RActionCallback>(OnHello), IntPtr.Zero);\n"
+"        window = R.Rwindow_create_from_xml_file(\"main.xml\");\n"
 "        while (R.Rdraw_frame() != 0) { }\n"
 "        R.Rshutdown();\n"
 "        return 0;\n"
 "    }\n"
-"}\n"
-"</script>\n"
-"\n";
+"}\n";
 
 static const char BUILD_ZIG[] =
 "const std = @import(\"std\");\n"
-"// (copies of bindings/zig of Raven: a build.zig only imports files of its project)\n"
-"const xmlzig = @import(\"raven/xmlzig.zig\");\n"
 "\n"
 "pub fn build(b: *std.Build) void {\n"
 "    const target = b.standardTargetOptions(.{});\n"
 "    const optimize = b.standardOptimizeOption(.{});\n"
+"    // (a copy of bindings/zig of Raven: a build.zig only imports files of its project)\n"
 "    const raven = b.createModule(.{ .root_source_file = b.path(\"raven/raven.zig\"), .target = target, .optimize = optimize });\n"
-"    // ravenc turns main.xmlzig into Zig: it is the program\n"
 "    const exe = b.addExecutable(.{\n"
 "        .name = \"{{NAME}}\",\n"
-"        .root_module = b.createModule(.{ .root_source_file = xmlzig.compile(b, \"main.xmlzig\"), .target = target, .optimize = optimize }),\n"
+"        .root_module = b.createModule(.{ .root_source_file = b.path(\"src/main.zig\"), .target = target, .optimize = optimize }),\n"
 "    });\n"
 "    exe.root_module.addImport(\"raven\", raven);\n"
 "    exe.root_module.linkSystemLibrary(\"raven\", .{});\n"
@@ -482,60 +454,61 @@ static const char BUILD_ZIG[] =
 "    if (b.graph.env_map.get(\"RAVEN_LIB_DIR\")) |dir| exe.root_module.addLibraryPath(.{ .cwd_relative = dir });\n"
 "    b.installArtifact(exe);\n"
 "    const run = b.addRunArtifact(exe);\n"
+"    // main.xml and strings.csv are read from the folder of the project\n"
 "    run.setCwd(b.path(\".\"));\n"
 "    b.step(\"run\", \"Run the program\").dependOn(&run.step);\n"
 "}\n";
 
-static const char SCRIPT_ZIG[] =
-"<!-- {{NAME}}: the interface and its Zig code, in one file. F5 builds and runs it. -->\n"
-"<script>\n"
+static const char PROGRAM_ZIG[] =
+"// {{NAME}}: the program. Its interface is main.xml, loaded when it starts:\n"
+"// save main.xml while it runs and the window follows. F5 builds and runs it.\n"
 "const r = @import(\"raven\");\n"
 "\n"
+"var window: r.Rid = r.R_INVALID_ID;\n"
 "var clicks: c_int = 0;\n"
 "\n"
-"// OnClicked=\"{on_hello}\" below calls this function: the compiler checks it\n"
-"fn on_hello(sender: r.Rid, action: ?[*:0]const u8, user_data: ?*anyopaque) callconv(.C) void {\n"
+"// OnClicked=\"hello.clicked\" in main.xml fires this action\n"
+"fn onHello(sender: r.Rid, action: ?[*:0]const u8, user_data: ?*anyopaque) callconv(.C) void {\n"
 "    _ = sender;\n"
 "    _ = action;\n"
 "    _ = user_data;\n"
 "    clicks += 1;\n"
-"    // ui.status: the widget with Name=\"status\"\n"
-"    r.Rlabel_set_text(ui.status, r.Rtr_plural(\"clicks\", clicks));\n"
+"    // the widget with Name=\"status\"\n"
+"    r.Rlabel_set_text(r.Rwidget_find(window, \"status\"), r.Rtr_plural(\"clicks\", clicks));\n"
 "}\n"
 "\n"
 "pub fn main() void {\n"
 "    if (r.Rinit(r.R_BACKEND_VULKAN) == 0) return;\n"
 "    _ = r.Rlocale_load_csv(\"strings.csv\");\n"
 "    _ = r.Rlocale_set_language(r.Rlocale_get_system_language());\n"
-"    _ = main_create();\n"
+"    r.Raction_bind(\"hello.clicked\", onHello, null);\n"
+"    window = r.Rwindow_create_from_xml_file(\"main.xml\");\n"
 "    while (r.Rdraw_frame() != 0) {}\n"
 "    r.Rshutdown();\n"
-"}\n"
-"</script>\n"
-"\n";
+"}\n";
 
-static const char SCRIPT_LUA[] =
-"<!-- {{NAME}}: the interface and its Lua code (LuaJIT), in one file. F5 runs it. -->\n"
-"<script>\n"
+static const char PROGRAM_LUA[] =
+"-- {{NAME}}: the program (LuaJIT). Its interface is main.xml, loaded when it starts:\n"
+"-- save main.xml while it runs and the window follows. F5 runs it.\n"
+"local ffi = require(\"ffi\")\n"
 "local r = require(\"raven\")\n"
-"\n"
-"clicks = 0\n"
-"\n"
-"-- OnClicked=\"{on_hello}\" below calls this function (a global function)\n"
-"function on_hello(sender, action)\n"
-"\tclicks = clicks + 1\n"
-"\t-- ui.status: the widget with Name=\"status\"\n"
-"\tr.Rlabel_set_text(ui.status, r.Rtr_plural(\"clicks\", clicks))\n"
-"end\n"
 "\n"
 "if r.Rinit(r.R_BACKEND_VULKAN) == 0 then os.exit(1) end\n"
 "r.Rlocale_load_csv(\"strings.csv\")\n"
 "r.Rlocale_set_language(r.Rlocale_get_system_language())\n"
-"main_create()\n"
+"local window = r.Rwindow_create_from_xml_file(\"main.xml\")\n"
+"local clicks = 0\n"
+"\n"
+"-- OnClicked=\"hello.clicked\" in main.xml fires this action (kept in a variable: the library calls it)\n"
+"local on_hello = ffi.cast(\"RActionCallback\", function(sender, action, user_data)\n"
+"\tclicks = clicks + 1\n"
+"\t-- the widget with Name=\"status\"\n"
+"\tr.Rlabel_set_text(r.Rwidget_find(window, \"status\"), r.Rtr_plural(\"clicks\", clicks))\n"
+"end)\n"
+"r.Raction_bind(\"hello.clicked\", on_hello, nil)\n"
+"\n"
 "while r.Rdraw_frame() ~= 0 do end\n"
-"r.Rshutdown()\n"
-"</script>\n"
-"\n";
+"r.Rshutdown()\n";
 
 /* ---------------------------------------------------------------------------
  *  Native projects: the classic Hello world of each language, built with its
@@ -787,37 +760,22 @@ int project_open(const char* folder) {
 	strings_reload();
 	welcome_hide();
 	recent_add(g_project_dir);
-	/* the interface of the project, when there is one: main.xml?? at the top or in src/ */
+	/* its program, then its interface when it has one (main.xml, in front: the island shows it) */
 	{
-		static const char* const folders[] = { "", "src" };
-		int f, i, opened = 0;
-		for (f = 0; f < 2 && !opened; f++) {
-			char* dir = f ? ide_join(g_project_dir, folders[f]) : ide_strdup(g_project_dir);
-			for (i = 0; i < ide_language_count() && !opened; i++) {
-				char name[64];
-				char* path;
-				snprintf(name, sizeof(name), "main.%s", ide_language_at(i)->extension);
-				path = ide_join(dir, name);
-				if (ide_file_exists(path)) {
-					ide_open_file(path, 0);
-					opened = 1;
-				}
-				free(path);
+		static const char* const programs[] = { "main.c", "main.cpp", "src/main.rs", "main.py", "main.go", "Program.cs", "src/main.zig", "main.lua" };
+		int i, opened = 0;
+		char* interface_path;
+		for (i = 0; i < (int)(sizeof(programs) / sizeof(programs[0])) && !opened; i++) {
+			char* path = ide_join(g_project_dir, programs[i]);
+			if (ide_file_exists(path)) {
+				ide_open_file(path, 0);
+				opened = 1;
 			}
-			free(dir);
+			free(path);
 		}
-		/* a native project: its program */
-		{
-			static const char* const natives[] = { "main.c", "main.cpp", "src/main.rs", "main.py", "main.go", "Program.cs", "src/main.zig", "main.lua" };
-			for (i = 0; i < (int)(sizeof(natives) / sizeof(natives[0])) && !opened; i++) {
-				char* path = ide_join(g_project_dir, natives[i]);
-				if (ide_file_exists(path)) {
-					ide_open_file(path, 0);
-					opened = 1;
-				}
-				free(path);
-			}
-		}
+		interface_path = ide_join(g_project_dir, "main.xml");
+		if (ide_file_exists(interface_path)) ide_open_file(interface_path, 0);
+		free(interface_path);
 	}
 	designer_update_title();
 	ide_status("Project %s opened. F5 builds and runs it.", ide_basename(g_project_dir));
@@ -837,18 +795,6 @@ static int write_new(const char* folder, const char* file, const char* text) {
 	if (!ide_file_exists(path)) ok = Rfile_write(path, text, strlen(text));
 	free(path);
 	return ok;
-}
-
-/* The interface, after the scripts, with the callback of the language. */
-static char* main_file(const char* script, const char* name, const char* bindings, const char* callback) {
-	char* head = expand(script, name, bindings, NULL, NULL);
-	char* window = expand(TEMPLATE_WINDOW_XML, name, bindings, "{{CALLBACK}}", callback);
-	char* both = (char*)malloc(strlen(head) + strlen(window) + 1);
-	strcpy(both, head);
-	strcat(both, window);
-	free(head);
-	free(window);
-	return both;
 }
 
 static int write_expanded(const char* folder, const char* file, const char* text, const char* name, const char* bindings) {
@@ -910,8 +856,6 @@ static int create_native(const char* folder, const char* name, const char* langu
 int project_create(const char* parent_folder, const char* name, const char* language, int with_interface) {
 	char* folder;
 	char* bindings;
-	char* text;
-	const char* main_name = NULL;
 	int ok = R_TRUE;
 	if (!valid_name(name)) {
 		ide_status("A project name is made of letters, digits, '_' and '-', and starts with a letter.");
@@ -940,85 +884,57 @@ int project_create(const char* parent_folder, const char* name, const char* lang
 	if (ide_iequal(language, "C") || ide_iequal(language, "C++")) {
 		int cpp = ide_iequal(language, "C++");
 		char* cmake = expand(TEMPLATE_CMAKE, name, bindings, "{{CMAKE_LANGUAGE}}", cpp ? "CXX" : "C");
-		char* cmake2 = expand(cmake, name, bindings, "{{MAIN}}", cpp ? "main.xmlc++" : "main.xmlc");
-		char* cmake3 = expand(cmake2, name, bindings, "{{LANGUAGE}}", cpp ? "C++" : "C");
-		ok = write_new(folder, "CMakeLists.txt", cmake3);
+		char* cmake2 = expand(cmake, name, bindings, "{{MAIN}}", cpp ? "main.cpp" : "main.c");
+		ok = write_new(folder, "CMakeLists.txt", cmake2);
 		free(cmake);
 		free(cmake2);
-		free(cmake3);
-		main_name = cpp ? "main.xmlc++" : "main.xmlc";
-		text = main_file(cpp ? SCRIPT_CPP : SCRIPT_C, name, bindings, "on_hello");
-		ok = ok && write_new(folder, main_name, text);
-		free(text);
+		ok = ok && write_expanded(folder, cpp ? "main.cpp" : "main.c", cpp ? PROGRAM_CPP : PROGRAM_C, name, bindings);
 		ok = ok && write_new(folder, ".gitignore", "build/\n.raven-ide\n");
 	} else if (ide_iequal(language, "Rust")) {
 		char* src = ide_join(folder, "src");
 		ok = write_expanded(folder, "Cargo.toml", CARGO_TOML, name, bindings);
-		ok = ok && write_new(folder, "build.rs", CARGO_BUILD_RS);
 		ok = ok && ide_make_dirs(src);
-		ok = ok && write_new(src, "main.rs", CARGO_MAIN_RS);
-		text = main_file(SCRIPT_RUST, name, bindings, "on_hello");
-		ok = ok && write_new(src, "main.xmlrs", text);
-		free(text);
+		ok = ok && write_expanded(src, "main.rs", PROGRAM_RUST, name, bindings);
 		free(src);
 		ok = ok && write_new(folder, ".gitignore", "target/\n.raven-ide\n");
-		main_name = "src/main.xmlrs";
 	} else if (ide_iequal(language, "Python")) {
-		main_name = "main.xmlpy";
-		text = main_file(SCRIPT_PYTHON, name, bindings, "on_hello");
-		ok = write_new(folder, main_name, text);
-		free(text);
+		ok = write_expanded(folder, "main.py", PROGRAM_PYTHON, name, bindings);
 		ok = ok && write_new(folder, ".gitignore", "__pycache__/\n.raven-ide\n");
 	} else if (ide_iequal(language, "Go")) {
-		main_name = "main.xmlgo";
 		ok = write_expanded(folder, "go.mod", GO_MOD, name, bindings);
-		ok = ok && write_new(folder, "generate.go", GO_GENERATE);
-		text = main_file(SCRIPT_GO, name, bindings, "on_hello");
-		ok = ok && write_new(folder, main_name, text);
-		free(text);
-		ok = ok && write_new(folder, ".gitignore", "main.xmlgo.go\n.raven-ide\n");
+		ok = ok && write_expanded(folder, "main.go", PROGRAM_GO, name, bindings);
+		ok = ok && write_new(folder, ".gitignore", ".raven-ide\n");
 	} else if (ide_iequal(language, "C#")) {
 		char csproj[300];
-		main_name = "main.xmlcs";
 		snprintf(csproj, sizeof(csproj), "%s.csproj", name);
 		ok = write_expanded(folder, csproj, CSPROJ, name, bindings);
-		text = main_file(SCRIPT_CSHARP, name, bindings, "OnHello");
-		ok = ok && write_new(folder, main_name, text);
-		free(text);
+		ok = ok && write_expanded(folder, "Program.cs", PROGRAM_CSHARP, name, bindings);
 		ok = ok && write_new(folder, ".gitignore", "bin/\nobj/\n.raven-ide\n");
 	} else if (ide_iequal(language, "Zig")) {
+		char* src = ide_join(folder, "src");
 		char* vendored = ide_join(folder, "raven");
 		char* from;
 		char* to;
-		main_name = "main.xmlzig";
 		ok = write_expanded(folder, "build.zig", BUILD_ZIG, name, bindings);
-		ok = ok && ide_make_dirs(vendored);
+		ok = ok && ide_make_dirs(src) && ide_make_dirs(vendored);
+		ok = ok && write_expanded(src, "main.zig", PROGRAM_ZIG, name, bindings);
 		/* (a build.zig only imports the files of its project: the bindings are copied in it) */
 		from = ide_join(bindings, "zig/raven.zig");
 		to = ide_join(vendored, "raven.zig");
 		ok = ok && copy_file(from, to);
 		free(from);
 		free(to);
-		from = ide_join(bindings, "zig/xmlzig.zig");
-		to = ide_join(vendored, "xmlzig.zig");
-		ok = ok && copy_file(from, to);
-		free(from);
-		free(to);
 		free(vendored);
-		text = main_file(SCRIPT_ZIG, name, bindings, "on_hello");
-		ok = ok && write_new(folder, main_name, text);
-		free(text);
+		free(src);
 		ok = ok && write_new(folder, ".gitignore", "zig-out/\n.zig-cache/\n.raven-ide\n");
 	} else if (ide_iequal(language, "Lua")) {
-		main_name = "main.xmllua";
-		text = main_file(SCRIPT_LUA, name, bindings, "on_hello");
-		ok = write_new(folder, main_name, text);
-		free(text);
-		ok = ok && write_new(folder, ".gitignore", "*.xmllua.lua\n.raven-ide\n");
+		ok = write_expanded(folder, "main.lua", PROGRAM_LUA, name, bindings);
+		ok = ok && write_new(folder, ".gitignore", ".raven-ide\n");
 	} else {
 		ide_status("Unknown language %s", language);
 		ok = R_FALSE;
 	}
+	ok = ok && write_expanded(folder, "main.xml", TEMPLATE_WINDOW_XML, name, bindings);
 	ok = ok && write_new(folder, "strings.csv", TEMPLATE_STRINGS);
 	free(bindings);
 	if (!ok) {
@@ -1026,7 +942,6 @@ int project_create(const char* parent_folder, const char* name, const char* lang
 		free(folder);
 		return R_FALSE;
 	}
-	(void)main_name;
 	ok = project_open(folder);
 	free(folder);
 	return ok;
@@ -1052,8 +967,8 @@ static const char NEW_PROJECT_XML[] =
 "      <TextInput Name=\"name\" Slot.Column=\"1\" Placeholder=\"my_app\"/>"
 "      <Label Text=\"Language\" Slot.Row=\"1\" Slot.VAlign=\"Center\"/>"
 "      <ComboBox Name=\"language\" Slot.Row=\"1\" Slot.Column=\"1\" Items=\"C (CMake)|C++ (CMake)|Rust (Cargo)|Python|Go|C# (dotnet)|Zig (zig build)|Lua (LuaJIT)\" Selected=\"0\"/>"
-"      <Label Text=\"Kind\" Slot.Row=\"2\" Slot.VAlign=\"Center\" Tooltip=\"With a Raven interface (.xmlc, .xmlrs, .xmlpy...), or the language alone\"/>"
-"      <ComboBox Name=\"kind\" Slot.Row=\"2\" Slot.Column=\"1\" Items=\"Raven interface + code (main.xmlc, main.xmlrs, main.xmlpy...)|Native: the language alone, a classic Hello world\" Selected=\"0\"/>"
+"      <Label Text=\"Kind\" Slot.Row=\"2\" Slot.VAlign=\"Center\" Tooltip=\"With a Raven interface (main.xml and the program that loads it), or the language alone\"/>"
+"      <ComboBox Name=\"kind\" Slot.Row=\"2\" Slot.Column=\"1\" Items=\"Raven interface + code (main.xml, loaded by main.c, src/main.rs, main.py...)|Native: the language alone, a classic Hello world\" Selected=\"0\"/>"
 "      <Label Text=\"Location\" Slot.Row=\"3\" Slot.VAlign=\"Center\"/>"
 "      <HBox Spacing=\"8\" Slot.Row=\"3\" Slot.Column=\"1\"><TextInput Name=\"folder\" Slot.Fill=\"1\"/><Button Name=\"browse\" Text=\"Browse...\"/></HBox>"
 "      <Label Name=\"prefix.label\" Text=\"Raven package\" Slot.Row=\"4\" Slot.VAlign=\"Center\" Tooltip=\"The folder with bin/, include/ and lib/: what the project is built with\"/>"
@@ -1080,7 +995,7 @@ static void np_update_kind(void) {
 	int native = Rcombo_box_get_selected(g_np.kind) == 1;
 	Rlabel_set_text(g_np.about, native
 		? "The language alone: what its tools need and a classic Hello world. No interface file and no translations: add them later if you want."
-		: "An interface with its code in one file (main.xmlc, main.xmlrs...), what the tools of its language need, and its translations (strings.csv). It builds as it is.");
+		: "An interface (main.xml), the program that loads it in your language, what the tools of the language need, and its translations (strings.csv). It builds as it is; save main.xml while it runs and its window follows.");
 	Rwidget_set_visibility(Rwidget_find(g_np.content, "prefix.label"), native ? R_COLLAPSED : R_VISIBLE);
 	Rwidget_set_visibility(Rwidget_find(g_np.content, "prefix.row"), native ? R_COLLAPSED : R_VISIBLE);
 }

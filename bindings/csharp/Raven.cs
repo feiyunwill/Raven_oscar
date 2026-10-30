@@ -1624,8 +1624,7 @@ namespace Raven
         /// <summary>
         /// Markup with R_LANGUAGE_EMBEDS: the language of what is between
         /// &lt;script&gt; and &lt;/script&gt; (the name of a language: "C", "Rust"...).
-        /// NULL: JavaScript, as in HTML. The XMLC, XMLRS, XMLPY... languages of
-        /// Raven use it for the code of their files.
+        /// NULL: JavaScript, as in HTML.
         /// </summary>
         public IntPtr script_language;
     }
@@ -1828,32 +1827,6 @@ namespace Raven
         /// One line saying what it does.
         /// </summary>
         public IntPtr description;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    public struct RXmlCompiledNode
-    {
-        /// <summary>
-        /// Tag of the element ("VBox", "Button", "Item"...).
-        /// </summary>
-        public IntPtr tag;
-        /// <summary>
-        /// Its text content ("" when none).
-        /// </summary>
-        public IntPtr text;
-        /// <summary>
-        /// name, value, name, value... (attribute_count pairs).
-        /// </summary>
-        public IntPtr attributes;
-        public int attribute_count;
-        /// <summary>
-        /// Index of the parent in the table, -1 for the root. The table lists a parent before its children, children in order.
-        /// </summary>
-        public int parent;
-        /// <summary>
-        /// Line in the source file, for the errors.
-        /// </summary>
-        public int line;
     }
 
     /// <summary>
@@ -6606,30 +6579,6 @@ namespace Raven
 
         [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
         public static extern uint Rwidget_create_from_xml_file([MarshalAs(UnmanagedType.LPUTF8Str)] string path);
-
-        /// <summary>
-        /// Builds the window described by a compiled table whose root is &lt;Window&gt;. `source` names the file in the errors.
-        /// </summary>
-        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
-        public static extern uint Rwindow_create_from_compiled(ref RXmlCompiledNode nodes, int count, [MarshalAs(UnmanagedType.LPUTF8Str)] string source);
-
-        /// <summary>
-        /// Builds the window described by a compiled table whose root is &lt;Window&gt;. `source` names the file in the errors.
-        /// </summary>
-        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
-        public static extern uint Rwindow_create_from_compiled(IntPtr nodes, int count, [MarshalAs(UnmanagedType.LPUTF8Str)] string source);
-
-        /// <summary>
-        /// Builds the widget tree described by a compiled table.
-        /// </summary>
-        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
-        public static extern uint Rwidget_create_from_compiled(ref RXmlCompiledNode nodes, int count, [MarshalAs(UnmanagedType.LPUTF8Str)] string source);
-
-        /// <summary>
-        /// Builds the widget tree described by a compiled table.
-        /// </summary>
-        [DllImport(Lib, CallingConvention = CallingConvention.Cdecl)]
-        public static extern uint Rwidget_create_from_compiled(IntPtr nodes, int count, [MarshalAs(UnmanagedType.LPUTF8Str)] string source);
 
         /// <summary>
         /// Folder used to resolve relative paths found in XML (Source="...",

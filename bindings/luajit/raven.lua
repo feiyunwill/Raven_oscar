@@ -624,7 +624,6 @@ typedef struct RSpring RSpring;
 typedef struct RShaderLook RShaderLook;
 typedef struct RXmlError RXmlError;
 typedef struct RXmlAttributeInfo RXmlAttributeInfo;
-typedef struct RXmlCompiledNode RXmlCompiledNode;
 typedef struct RAccessibilitySettings RAccessibilitySettings;
 typedef struct RHostPlatformDesc RHostPlatformDesc;
 typedef void (*RFrameCallback)(double delta_seconds, void* user_data);
@@ -842,14 +841,6 @@ struct RXmlAttributeInfo {
 	const char* choices;
 	const char* group;
 	const char* description;
-};
-struct RXmlCompiledNode {
-	const char* tag;
-	const char* text;
-	const char* const* attributes;
-	int attribute_count;
-	int parent;
-	int line;
 };
 struct RAccessibilitySettings {
 	float text_scale;
@@ -1658,8 +1649,6 @@ Rid Rwindow_create_from_xml(const char* xml, size_t size);
 Rid Rwindow_create_from_xml_file(const char* path);
 Rid Rwidget_create_from_xml(const char* xml, size_t size);
 Rid Rwidget_create_from_xml_file(const char* path);
-Rid Rwindow_create_from_compiled(const RXmlCompiledNode* nodes, int count, const char* source);
-Rid Rwidget_create_from_compiled(const RXmlCompiledNode* nodes, int count, const char* source);
 void Rxml_set_base_path(const char* path);
 void Rxml_set_live_reload(int enabled);
 int Rxml_get_live_reload(void);

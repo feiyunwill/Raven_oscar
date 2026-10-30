@@ -5286,7 +5286,6 @@ func HostInjectClose(window ID) {
 // Rcustom_set_paint_callback, Rcustom_set_measure_callback, Rdraw_rect, Rdraw_rect_outline, Rdraw_circle
 // Rdraw_line, Rdraw_curve, Rdraw_triangle, Rdraw_image, Rdraw_text, Rdraw_glass, Rdraw_spring, Rspring_kick
 // Rspring_set, Rdraw_push_clip_rect, Rdraw_pop_clip_rect, Reffect_get_defaults, Rshader_look_init
-// Rshader_look_defaults, Rdraw_shader, Rborder_set_effect, Rwindow_create_from_compiled
-// Rwidget_create_from_compiled, Rxml_set_reload_callback, Rxml_register_tag, Rxml_document_parse
-// Rxml_get_attribute_info, Rlocale_set_changed_callback, Rtr_format, Raccessibility_get_system_settings
-// Rhost_platform_register
+// Rshader_look_defaults, Rdraw_shader, Rborder_set_effect, Rxml_set_reload_callback, Rxml_register_tag
+// Rxml_document_parse, Rxml_get_attribute_info, Rlocale_set_changed_callback, Rtr_format
+// Raccessibility_get_system_settings, Rhost_platform_register

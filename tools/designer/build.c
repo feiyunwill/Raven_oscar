@@ -2,9 +2,9 @@
  * Raven Designer - build.c
  * Builds the project with the CMake and the compiler installed on the
  * machine: configure, build, run, stop. What they write goes to the Output
- * panel; the errors and warnings (GCC, Clang, MSVC, CMake, ravenc) go to the
- * Build panel, and on the lines of the editors. A double click opens the
- * file at the line, the .xmlc included (the compiler sees its lines).
+ * panel; the errors and warnings (GCC, Clang, MSVC, CMake, cargo, go...) go
+ * to the Build panel, and on the lines of the editors. A double click opens
+ * the file at the line.
  */
 
 #include "ide.h"
@@ -128,48 +128,9 @@ static void clear_issues(void) {
 	editors_clear_markers();
 }
 
-static char* find_in(const char* folder, const char* name, int depth) {
-	ide_entry_t* entries;
-	int count = ide_list_dir(folder, &entries), i;
-	char* found = NULL;
-	for (i = 0; i < count && !found; i++) if (!entries[i].is_dir && !strcmp(entries[i].name, name)) found = ide_join(folder, name);
-	for (i = 0; i < count && !found && depth > 0; i++) {
-		if (entries[i].is_dir && entries[i].name[0] != '.' && strcmp(entries[i].name, "build") && strcmp(entries[i].name, "target")
-			&& strcmp(entries[i].name, "obj") && strcmp(entries[i].name, "bin") && strcmp(entries[i].name, "zig-out") && strcmp(entries[i].name, "node_modules")) {
-			char* sub = ide_join(folder, entries[i].name);
-			found = find_in(sub, name, depth - 1);
-			free(sub);
-		}
-	}
-	free(entries);
-	return found;
-}
-
-/*
- * A file ravenc made (main.xmlrs.rs, main.xmlgo.go, main.xmlcs.cs...) is the
- * .xmlrs of the project: the scripts keep their lines in it.
- */
-static char* source_of_generated(const char* file) {
-	char name[300];
-	const char* base = ide_basename(file);
-	char* dot;
-	snprintf(name, sizeof(name), "%s", base);
-	dot = strrchr(name, '.');
-	if (!dot || !g_project_dir) return NULL;
-	*dot = 0;
-	if (!ide_interface_language(name)) return NULL;
-	return find_in(g_project_dir, name, 4);
-}
-
 /* A path the tool wrote, as a file that exists (they are often relative to the build folder). */
 static char* resolve_file(const char* file) {
 	char* candidate;
-	char* source = source_of_generated(file);
-	if (source) {
-		char* n = ide_normalize(source);
-		free(source);
-		return n;
-	}
 	if (ide_file_exists(file)) return ide_normalize(file);
 	if (g_project_dir) {
 		char* build = ide_join(g_project_dir, "build");
@@ -268,7 +229,7 @@ static void parse_line(const char* line) {
 			return;
 		}
 	}
-	/* go: "./main.xmlgo.go:12:5: undefined: x" (no word for the kind: an error) */
+	/* go: "./main.go:12:5: undefined: x" (no word for the kind: an error) */
 	if (g_b.kind == KIND_GO && line[0] != '#') {
 		for (p = line + 1; (p = strchr(p, ':')) != NULL; p++) {
 			const char* q = p + 1;
@@ -323,7 +284,7 @@ static void parse_line(const char* line) {
 		}
 		p = strchr(p + 1, '(');
 	}
-	/* GCC, Clang, ravenc: file:12:5: error: ... or file:12: error: ... (C:\ is a drive, not a line) */
+	/* GCC, Clang: file:12:5: error: ... or file:12: error: ... (C:\ is a drive, not a line) */
 	for (p = line + 1; (p = strchr(p, ':')) != NULL; p++) {
 		const char* q = p + 1;
 		int n = read_number(&q), column = 0;
@@ -544,15 +505,7 @@ static kind_t project_kind(void) {
 	}
 	if (has_file("build.zig")) return KIND_ZIG;
 	if (has_file("CMakeLists.txt")) return KIND_CMAKE;
-	if ((file = first_with_extension("xmlpy")) != NULL) {
-		free(file);
-		return KIND_PYTHON;
-	}
-	if ((file = first_with_extension("xmllua")) != NULL) {
-		free(file);
-		return KIND_LUA;
-	}
-	/* native projects: a program in the language alone */
+	/* nothing to build: a program run by its interpreter */
 	if ((file = first_with_extension("py")) != NULL) {
 		free(file);
 		return KIND_PYTHON;
@@ -571,7 +524,7 @@ static int have_project(void) {
 	}
 	g_b.kind = project_kind();
 	if (g_b.kind == KIND_NONE) {
-		ide_status("Nothing to build: the project has no CMakeLists.txt, Cargo.toml, go.mod, .csproj, build.zig, .xmlpy, .xmllua, .py or .lua.");
+		ide_status("Nothing to build: the project has no CMakeLists.txt, Cargo.toml, go.mod, .csproj, build.zig, .py or .lua.");
 		return R_FALSE;
 	}
 	return R_TRUE;
@@ -579,8 +532,8 @@ static int have_project(void) {
 
 /*
  * What the tools of the languages need to find Raven, from the folder of the
- * Raven package: ravenc in the PATH, the library for the linker and for the
- * program, the bindings of Python and Lua.
+ * Raven package: its programs in the PATH, the library for the linker and for
+ * the program, the bindings of Python and Lua.
  */
 static void set_environment(void) {
 	char *bin, *lib, *bindings, *value;
@@ -590,13 +543,6 @@ static void set_environment(void) {
 	lib = ide_join(prefix, "lib");
 	bindings = ide_join(prefix, "share/raven/bindings");
 	ide_prepend_path(bin);
-#if defined(_WIN32)
-	value = ide_join(bin, "ravenc.exe");
-#else
-	value = ide_join(bin, "ravenc");
-#endif
-	ide_set_env("RAVENC", value);
-	free(value);
 	ide_set_env("RAVEN_LIB_DIR", lib);
 #if defined(_WIN32)
 	value = ide_join(bin, "raven.dll");
@@ -680,11 +626,6 @@ static int add_language_steps(const char* action) {
 		case KIND_GO:
 			if (clean) { step = add_step(g_project_dir); add_arg(step, "go"); add_arg(step, "clean"); }
 			if (build || run) {
-				/* ravenc writes main.xmlgo.go (//go:generate) */
-				step = add_step(g_project_dir);
-				add_arg(step, "go");
-				add_arg(step, "generate");
-				add_arg(step, "./...");
 				step = add_step(g_project_dir);
 				add_arg(step, "go");
 				add_arg(step, run ? "run" : "build");
@@ -714,82 +655,40 @@ static int add_language_steps(const char* action) {
 			}
 			break;
 		case KIND_PYTHON:
-			main_file = has_file("main.xmlpy") ? ide_strdup("main.xmlpy") : first_with_extension("xmlpy");
-			if (!main_file) {
-				/* a native project: python and its file, nothing of Raven */
-				main_file = has_file("main.py") ? ide_strdup("main.py") : first_with_extension("py");
-				step = add_step(g_project_dir);
-				add_arg(step, "%s", python_program());
-				if (run) {
-					step->run = R_TRUE;
-					add_arg(step, "%s", main_file);
-					add_run_arguments(step);
-				} else {
-					add_arg(step, "-m");
-					add_arg(step, "py_compile");
-					add_arg(step, "%s", main_file);
-				}
-				free(main_file);
-				break;
-			}
-			/* building: ravenc reads it (its mistakes are reported); running: python with raven_xmlpy */
+			/* python and its file: building reads it (its mistakes are reported), nothing runs */
+			main_file = has_file("main.py") ? ide_strdup("main.py") : first_with_extension("py");
 			step = add_step(g_project_dir);
+			add_arg(step, "%s", python_program());
 			if (run) {
 				step->run = R_TRUE;
-				add_arg(step, "%s", python_program());
+				add_arg(step, "%s", main_file);
+				add_run_arguments(step);
+			} else {
 				add_arg(step, "-m");
-				add_arg(step, "raven_xmlpy");
-				add_arg(step, "%s", main_file);
-				add_run_arguments(step);
-			} else {
-				add_arg(step, "%s", python_program());
-				add_arg(step, "-c");
-				add_arg(step, "import raven_xmlpy, py_compile, sys; py_compile.compile(raven_xmlpy.compile_file(sys.argv[1]), doraise=True)");
+				add_arg(step, "py_compile");
 				add_arg(step, "%s", main_file);
 			}
 			free(main_file);
 			break;
-		case KIND_LUA:
-			main_file = has_file("main.xmllua") ? ide_strdup("main.xmllua") : first_with_extension("xmllua");
-			if (!main_file) {
-				/* a native project: LuaJIT (or Lua) and its file */
-				char found[1024], check[700];
-				const char* lua = ide_find_program("luajit", found, sizeof(found)) || !ide_find_program("lua", found, sizeof(found)) ? "luajit" : "lua";
-				main_file = has_file("main.lua") ? ide_strdup("main.lua") : first_with_extension("lua");
-				step = add_step(g_project_dir);
-				add_arg(step, "%s", lua);
-				if (run) {
-					step->run = R_TRUE;
-					add_arg(step, "%s", main_file);
-					add_run_arguments(step);
-				} else {
-					/* building: the file is read, its mistakes are reported, nothing runs */
-					snprintf(check, sizeof(check), "assert(loadfile('%s'))", main_file);
-					add_arg(step, "-e");
-					add_arg(step, "%s", check);
-				}
-				free(main_file);
-				break;
-			}
+		case KIND_LUA: {
+			/* LuaJIT (or Lua) and its file: building reads it (its mistakes are reported), nothing runs */
+			char found[1024], check[700];
+			const char* lua = ide_find_program("luajit", found, sizeof(found)) || !ide_find_program("lua", found, sizeof(found)) ? "luajit" : "lua";
+			main_file = has_file("main.lua") ? ide_strdup("main.lua") : first_with_extension("lua");
 			step = add_step(g_project_dir);
+			add_arg(step, "%s", lua);
 			if (run) {
-				char script[1200];
 				step->run = R_TRUE;
-				add_arg(step, "luajit");
-				snprintf(script, sizeof(script), "%s/share/raven/bindings/luajit/raven_xmllua.lua", g_settings.raven_prefix[0] ? g_settings.raven_prefix : ".");
-				add_arg(step, "%s", script);
 				add_arg(step, "%s", main_file);
 				add_run_arguments(step);
 			} else {
-				char output[600];
-				snprintf(output, sizeof(output), "%s.lua", main_file);
-				add_arg(step, "ravenc");
-				add_arg(step, "%s", main_file);
-				add_arg(step, "-o");
-				add_arg(step, "%s", output);
+				snprintf(check, sizeof(check), "assert(loadfile('%s'))", main_file);
+				add_arg(step, "-e");
+				add_arg(step, "%s", check);
 			}
 			free(main_file);
 			break;
+		}
 		default:
 			return R_FALSE;
 	}

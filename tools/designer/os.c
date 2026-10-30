@@ -90,35 +90,6 @@ void ide_buffer_free(ide_buffer_t* buffer) {
 	memset(buffer, 0, sizeof(*buffer));
 }
 
-static const ide_language_t g_ide_languages[] = {
-	{ "xmlc", "C", "C" },
-	{ "xmlc++", "C++", "C++" },
-	{ "xmlcpp", "C++", "C++" },
-	{ "xmlrs", "Rust", "Rust" },
-	{ "xmlpy", "Python", "Python" },
-	{ "xmlgo", "Go", "Go" },
-	{ "xmlcs", "C#", "C#" },
-	{ "xmlzig", "Zig", "Zig" },
-	{ "xmllua", "Lua", "Lua" }
-};
-
-const ide_language_t* ide_interface_language(const char* path) {
-	const char* ext = ide_extension(path);
-	size_t i;
-	for (i = 0; i < sizeof(g_ide_languages) / sizeof(g_ide_languages[0]); i++) {
-		if (ide_iequal(ext, g_ide_languages[i].extension)) return &g_ide_languages[i];
-	}
-	return NULL;
-}
-
-int ide_language_count(void) {
-	return (int)(sizeof(g_ide_languages) / sizeof(g_ide_languages[0]));
-}
-
-const ide_language_t* ide_language_at(int index) {
-	return index >= 0 && index < ide_language_count() ? &g_ide_languages[index] : NULL;
-}
-
 char* ide_normalize(const char* path) {
 	char* copy = ide_strdup(path);
 	char* p;

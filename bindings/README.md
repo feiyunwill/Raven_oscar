@@ -77,6 +77,11 @@ The same program is in each folder (`example.py`, `example.cpp`,
 `examples/hello.rs`, `example/main.go`), and the designer (`raven_designer`)
 edits the XML.
 
+The XML can also stay in a file of its own, loaded when the program starts
+(`Rwindow_create_from_xml_file("main.xml")`): save it while the program runs
+and the window follows, the code untouched. It is what the designer's New
+project writes, in every language.
+
 Raven belongs to the thread that starts it: call it from that thread only
 (in Go, `runtime.LockOSThread()` at the top of `main`).
 
@@ -134,17 +139,3 @@ After changing a public header:
 language, add `tools/bindgen/gen_<language>.py` with a `generate(api)`
 function that returns `{path: text}`, and its name to the list in
 `bindgen.py`; `cparse.py` documents the data it receives.
-
-## Interfaces with their code (ravenc)
-
-Each binding can also take an interface written in Raven XML with its code
-in `<script>` blocks, compiled by `ravenc` (see the main README):
-
-- Rust: `rust-build/` (the build-dependency `raven-gui-build`: `raven_build::compile("src/main.xmlrs")` in `build.rs`)
-- Python: `python/raven_xmlpy.py` (`import raven_xmlpy`, then import the `.xmlpy` as a module)
-- Go: `go/raven/compiled.go` (used by the files `//go:generate ravenc` writes)
-- C#: `csharp/Raven.XmlCs.targets` (imported by the `.csproj`)
-- Zig: `zig/xmlzig.zig` (from `build.zig`)
-- LuaJIT: `luajit/raven_xmllua.lua` (`require("raven_xmllua")`)
-
-These files are written by hand: `tools/bindgen` leaves them alone.

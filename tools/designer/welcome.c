@@ -115,34 +115,18 @@ void prefs_set(const char* key, const char* value) {
  *  Recent projects
  * ------------------------------------------------------------------------- */
 
-/* What a project is written in: its interface file, else how it is built. */
+/* What a project is written in: the file its tools read, or its program. */
 static const char* detect_language(const char* folder) {
-	static const char* const subfolders[] = { "", "src" };
-	int f, i;
-	for (f = 0; f < 2; f++) {
-		for (i = 0; i < ide_language_count(); i++) {
-			char name[80];
-			char* path;
-			int found;
-			snprintf(name, sizeof(name), "%s%smain.%s", subfolders[f], f ? "/" : "", ide_language_at(i)->extension);
-			path = ide_join(folder, name);
-			found = ide_file_exists(path);
-			free(path);
-			if (found) return ide_language_at(i)->name;
-		}
-	}
-	/* a native project: the file its tools read, or its program */
-	{
-		static const struct { const char* file; const char* language; } natives[] = {
-			{ "main.c", "C" }, { "main.cpp", "C++" }, { "Cargo.toml", "Rust" }, { "go.mod", "Go" }, { "Program.cs", "C#" },
-			{ "build.zig", "Zig" }, { "main.py", "Python" }, { "main.lua", "Lua" }
-		};
-		for (i = 0; i < (int)(sizeof(natives) / sizeof(natives[0])); i++) {
-			char* path = ide_join(folder, natives[i].file);
-			int found = ide_file_exists(path);
-			free(path);
-			if (found) return natives[i].language;
-		}
+	static const struct { const char* file; const char* language; } programs[] = {
+		{ "main.c", "C" }, { "main.cpp", "C++" }, { "Cargo.toml", "Rust" }, { "go.mod", "Go" }, { "Program.cs", "C#" },
+		{ "build.zig", "Zig" }, { "main.py", "Python" }, { "main.lua", "Lua" }
+	};
+	int i;
+	for (i = 0; i < (int)(sizeof(programs) / sizeof(programs[0])); i++) {
+		char* path = ide_join(folder, programs[i].file);
+		int found = ide_file_exists(path);
+		free(path);
+		if (found) return programs[i].language;
 	}
 	{
 		char* cmake = ide_join(folder, "CMakeLists.txt");
@@ -516,7 +500,7 @@ static const char WELCOME_XML[] =
 "      <Spacer Height=\"22\"/>"
 "      <Button Text=\"New project...\" Style=\"Primary\" OnClicked=\"project.new\" Tooltip=\"In the language you choose: with a Raven interface, or native (Ctrl+Shift+N)\"/>"
 "      <Button Text=\"Open a folder...\" OnClicked=\"project.open\" Tooltip=\"A project folder (Ctrl+Shift+O)\"/>"
-"      <Button Text=\"Open a file...\" OnClicked=\"file.open\" Tooltip=\"An interface: .xml, .xmlc, .xmlrs... (Ctrl+O)\"/>"
+"      <Button Text=\"Open a file...\" OnClicked=\"file.open\" Tooltip=\"An interface: .xml (Ctrl+O)\"/>"
 "      <Button Name=\"welcome.back\" Style=\"Flat\" OnClicked=\"welcome.back\" Visibility=\"Collapsed\"/>"
 "      <Spacer Height=\"22\"/>"
 "      <Label Text=\"Without a project\" Opacity=\"0.55\"/>"

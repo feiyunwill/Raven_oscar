@@ -1,13 +1,13 @@
 # Raven tools.
 #
-#   raven_designer   the IDE of Raven (tools/designer): CMake projects, interfaces
-#                    edited visually (.xml, .xmlc), code, translations, build and run
+#   raven_designer   the IDE of Raven (tools/designer): projects, interfaces
+#                    edited visually (.xml), code, translations, build and run
 #
 # embed.py and subset_font.py are the scripts that produce the files of
 # src/embedded; they are not needed to build.
 
 add_executable(raven_designer designer/main.c designer/ide.h designer/os.c designer/project.c designer/editors.c
-	designer/xmlc.c designer/build.c designer/strings.c designer/welcome.c designer/accessibility.c designer/island.c designer/drawer.c)
+	designer/build.c designer/strings.c designer/welcome.c designer/accessibility.c designer/island.c designer/drawer.c)
 # the headers of Raven, for the completion of its API (an installed IDE reads ../include)
 target_compile_definitions(raven_designer PRIVATE "RAVEN_IDE_INCLUDE_DIR=\"${PROJECT_SOURCE_DIR}/include\"")
 target_link_libraries(raven_designer PRIVATE raven::raven)
@@ -31,22 +31,27 @@ if(RAVEN_BUILD_TESTS)
 	add_test(NAME designer_script COMMAND raven_designer --null --frames 3 --script
 		"do file.new.window f 2 path 0/0 set Text Bonjour expect Bonjour pick 2 do palette.add expect <Grid~Columns do edit.duplicate do edit.up do edit.wrap.Border expect <Border> do edit.unwrap do edit.delete do edit.undo do edit.undo do edit.redo do file.new.form expect <Field~Label path 2/1 set Hint typed expect Hint=\"typed\" do edit.duplicate do edit.out do edit.in do view.theme.glass_light do view.interact do view.run f 3 do view.theme.dark do file.new.panel expect <Border~Padding f 2")
 
-	# The IDE: a new project (CMakeLists.txt, main.xmlc, strings.csv), its interface and its
-	# scripts, a translation edited and shown in the preview in another language, everything saved.
+	# The IDE: a new project (CMakeLists.txt, main.c, main.xml, strings.csv), its interface and its
+	# program, a translation edited and shown in the preview in another language, everything saved.
 	set(_ide "${CMAKE_CURRENT_BINARY_DIR}/ide_test")
 	add_test(NAME designer_ide_clean COMMAND "${CMAKE_COMMAND}" -E remove_directory "${_ide}")
 	add_test(NAME designer_ide_folder COMMAND "${CMAKE_COMMAND}" -E make_directory "${_ide}")
 	set_tests_properties(designer_ide_clean PROPERTIES FIXTURES_SETUP designer_ide_clean)
 	set_tests_properties(designer_ide_folder PROPERTIES FIXTURES_SETUP designer_ide FIXTURES_REQUIRED designer_ide_clean)
 	add_test(NAME designer_ide COMMAND raven_designer --null --frames 2 --script
-		"f 2 project ${_ide} demo C preview ${_ide}/demo/main.xmlc expect @hello.button expectfile ${_ide}/demo/CMakeLists.txt raven_target_xmlc(demo) expectlabel status You~have~not~clicked~yet. cell hello.none 2 Rien~encore language fr f 1 expectlabel status Rien~encore language - f 1 expectlabel status You~have~not~clicked~yet. path 0/0 set Text Hi do file.save_all expectfile ${_ide}/demo/main.xmlc Text=\"Hi\" expectfile ${_ide}/demo/main.xmlc Rtr_plural(\"clicks\",~g_clicks) expectfile ${_ide}/demo/strings.csv ,Rien~encore f 2")
+		"f 2 project ${_ide} demo C expecttabs main.c expecttabs main.xml preview ${_ide}/demo/main.xml expect @hello.button expect OnClicked=\"hello.clicked\" expectfile ${_ide}/demo/CMakeLists.txt add_executable(demo~main.c~main.xml~strings.csv) expectfile ${_ide}/demo/main.c Rwindow_create_from_xml_file(\"main.xml\") expectfile ${_ide}/demo/main.c Raction_bind(\"hello.clicked\" expectlabel status You~have~not~clicked~yet. cell hello.none 2 Rien~encore language fr f 1 expectlabel status Rien~encore language - f 1 expectlabel status You~have~not~clicked~yet. path 0/0 set Text Hi do file.save_all expectfile ${_ide}/demo/main.xml Text=\"Hi\" expectfile ${_ide}/demo/main.c Rtr_plural(\"clicks\",~g_clicks) expectfile ${_ide}/demo/strings.csv ,Rien~encore f 2")
 	set_tests_properties(designer_ide PROPERTIES FIXTURES_REQUIRED designer_ide)
 
 	# An interface opens as code and the island is its preview; the visual editor (its panels)
 	# only comes when asked (Preview), and its file goes back to a code editor with its changes.
 	add_test(NAME designer_preview COMMAND raven_designer --null --frames 2 --script
-		"f 2 project ${_ide} live C f 2 expectpanel panel.preview 0 expectpanel panel.widgets 0 expectpanel source 0 expecttabs main.xmlc expectisland status You~have~not~clicked~yet. cell hello.none 2 Rien~encore language fr f 1 expectisland status Rien~encore language - f 1 preview ${_ide}/live/main.xmlc f 2 expectpanel panel.preview 1 expectpanel panel.widgets 1 expectisland - - path 0/1 set Text Typed f 1 do view.preview.close f 2 expectpanel panel.preview 0 expecttabs main.xmlc expectisland status Typed do view.reset f 1 expectpanel panel.preview 0 do file.save_all expectfile ${_ide}/live/main.xmlc Text=\"Typed\" f 2")
+		"f 2 project ${_ide} live C f 2 expectpanel panel.preview 0 expectpanel panel.widgets 0 expectpanel source 0 expecttabs main.xml expectisland status You~have~not~clicked~yet. cell hello.none 2 Rien~encore language fr f 1 expectisland status Rien~encore language - f 1 preview ${_ide}/live/main.xml f 2 expectpanel panel.preview 1 expectpanel panel.widgets 1 expectisland - - path 0/1 set Text Typed f 1 do view.preview.close f 2 expectpanel panel.preview 0 expecttabs main.xml expectisland status Typed do view.reset f 1 expectpanel panel.preview 0 do file.save_all expectfile ${_ide}/live/main.xml Text=\"Typed\" f 2")
 	set_tests_properties(designer_preview PROPERTIES FIXTURES_REQUIRED designer_ide)
+
+	# The other languages: main.xml and the program that loads it, with what the tools of the language need.
+	add_test(NAME designer_languages COMMAND raven_designer --null --frames 2 --script
+		"f 1 project ${_ide} ui_rs Rust expectfile ${_ide}/ui_rs/src/main.rs Rwindow_create_from_xml_file expectfile ${_ide}/ui_rs/Cargo.toml raven-gui expectfile ${_ide}/ui_rs/main.xml OnClicked=\"hello.clicked\" expecttabs main.rs expecttabs main.xml project ${_ide} ui_cpp C++ expectfile ${_ide}/ui_cpp/main.cpp Raction_bind project ${_ide} ui_py Python expectfile ${_ide}/ui_py/main.py r.Raction_bind(\"hello.clicked\" project ${_ide} ui_go Go expectfile ${_ide}/ui_go/main.go raven.ActionBind(\"hello.clicked\" expectfile ${_ide}/ui_go/go.mod replace~raven project ${_ide} ui_cs C# expectfile ${_ide}/ui_cs/Program.cs R.Raction_bind(\"hello.clicked\" expectfile ${_ide}/ui_cs/ui_cs.csproj Raven.cs project ${_ide} ui_zig Zig expectfile ${_ide}/ui_zig/src/main.zig r.Raction_bind(\"hello.clicked\" expectfile ${_ide}/ui_zig/raven/raven.zig Rwindow_create_from_xml_file project ${_ide} ui_lua Lua expectfile ${_ide}/ui_lua/main.lua r.Raction_bind(\"hello.clicked\" f 1")
+	set_tests_properties(designer_languages PROPERTIES FIXTURES_REQUIRED designer_ide)
 
 	# Native projects: the language alone and a Hello world, nothing of Raven.
 	add_test(NAME designer_native COMMAND raven_designer --null --frames 2 --script

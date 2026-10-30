@@ -6,7 +6,6 @@
  *   os.c        folders, files and programs (CMake, the compiler, the program)
  *   project.c   the project: its folder, New project (with a Raven interface, or native), settings
  *   editors.c   code editors (C, CMake, any text, the interfaces too) in tabs, and completion
- *   xmlc.c      .xmlc files: their <script> blocks and their interface
  *   build.c     configure, build, run, the Output panel and the build problems
  *   strings.c   the Translations panel (CSV tables) and the language of the preview
  *   welcome.c   the start page (recent projects) and the preferences of the IDE
@@ -82,26 +81,26 @@ extern Rid g_ide_dialog;
 /** The dock panel the code editors share tabs with. */
 extern Rid g_ide_center;
 void ide_status(const char* format, ...);
-/** Opens an interface in the visual editor: the text of a .xml, or of the interface part of a .xmlc. */
-void designer_load_interface(const char* text, const char* path, int is_xmlc);
+/** Opens an interface in the visual editor: the text of a .xml. */
+void designer_load_interface(const char* text, const char* path);
 /** The text the visual editor holds now (what is written in its XML panel). */
 const char* designer_get_interface_text(void);
 /** The file the visual editor shows, or NULL. */
 const char* designer_get_path(void);
 int  designer_is_modified(void);
 void designer_set_modified(int modified);
-/** The Name attributes of the interface (for ui.<name> in the scripts). */
+/** The Name attributes of the interface (completion of Rwidget_find(window, "name") in the code). */
 int  designer_get_names(const char** names, int max);
 /** Opens a .xml file in the visual editor; goes to a line of its XML panel. */
 void designer_open_file(const char* path);
 void designer_go_to_line(int line);
-/** A mark of the compiler on a line of the XML panel (an .xmlc: a line of the file). */
+/** A mark on a line of the XML panel. */
 void designer_add_marker(int line, int column, int error, const char* message);
 /** Builds the preview again (after the translations or the language changed). */
 void designer_refresh_preview(void);
 /** The frame of the preview: the strings panel sets its direction. */
 Rid  designer_get_frame(void);
-/** Saves what the visual editor holds into its file (for .xmlc: with its scripts). */
+/** Saves what the visual editor holds into its file. */
 int  designer_save(void);
 /** The title of the window, after what it names changed (the project, the page). */
 void designer_update_title(void);
@@ -154,7 +153,7 @@ void project_shutdown(void);
 int  project_open(const char* folder);
 /**
  * Creates a project in a language ("C", "C++", "Rust", "Python", "Go", "C#", "Zig", "Lua") and opens it.
- * with_interface: R_TRUE, an interface with its code (main.xmlc, main.xmlrs...) and strings.csv;
+ * with_interface: R_TRUE, an interface (main.xml), the program that loads it (main.c, src/main.rs...) and strings.csv;
  * R_FALSE, a native project: the language alone and a classic Hello world.
  */
 int  project_create(const char* parent_folder, const char* name, const char* language, int with_interface);
@@ -165,7 +164,7 @@ void project_save_settings(void);
  * preview; the visual editor when it already shows it) or the Translations panel.
  */
 void ide_open_file(const char* path, int line);
-/** Opens an interface (.xml, .xmlc...) in the visual editor: the Preview of the content drawer. */
+/** Opens an interface (.xml) in the visual editor: the Preview of the content drawer. */
 void ide_preview_file(const char* path);
 /** The name of the first add_executable of the CMakeLists.txt of the project. */
 int  project_target_name(char* out, size_t size);
@@ -189,7 +188,7 @@ void editors_close_file(const char* path);
 int  editors_is_modified(Rid editor);
 /** The file of the code editor in front (the keyboard is in it, or it was last), or NULL. */
 const char* editors_current_path(void);
-/** The same when it is an interface (.xml, .xmlc...): its text now, and a number that changes with it. */
+/** The same when it is an interface (.xml): its text now, and a number that changes with it. */
 int  editors_current_interface(const char** path, const char** text, unsigned* revision);
 /** Where a new code editor goes (an editor, the preview), or R_INVALID_ID: above the Output. */
 Rid  editors_anchor(void);
@@ -199,9 +198,6 @@ void editors_regroup(void);
 void editors_zoom_attach(Rid editor);
 /** Every editor back to 100 %. */
 void editors_reset_zoom(void);
-/** Opens a piece of text with a name (a script of a .xmlc), written back through `save`. */
-typedef int (*ide_save_callback)(Rid editor, void* user_data);
-Rid  editors_open_virtual(const char* title, const char* key, const char* text, const char* language, ide_save_callback save, void* user_data);
 Rid  editors_find(const char* key);
 /** A tab whose title contains `text` (scripts of the tests). */
 Rid  editors_find_title(const char* text);
@@ -220,22 +216,6 @@ void editors_set_modified(Rid editor, int modified);
 /** Completion shared with the XML panel of the visual editor. */
 void completion_attach(Rid editor, int xml);
 void completion_load_raven_api(void);
-
-/* ---- xmlc.c ---- */
-
-/** Opens a .xmlc (or .xmlrs, .xmlpy...) whole in the XML panel; the visual editor shows its interface element. */
-int  xmlc_open(const char* path);
-/** The same with a text instead of the file (NULL: the file). */
-int  xmlc_open_text(const char* path, const char* text);
-/** Writes the .xmlc back: the text of the XML panel, scripts and interface together. */
-int  xmlc_save(void);
-/** Where the interface element of the text of an .xmlc is (offsets, and its first line): 1, 0 when there is none, -1 when an element is not closed. */
-int  xmlc_find_interface(const char* text, size_t* start, size_t* end, int* line);
-int  xmlc_is_open(void);
-const char* xmlc_path(void);
-void xmlc_close(void);
-/** The line of the interface element in the file. */
-int  xmlc_interface_line(void);
 
 /* ---- build.c ---- */
 
@@ -300,17 +280,6 @@ void accessibility_window(void);
 /** The menu follows the settings (Reduce motion). */
 void accessibility_sync_menu(void);
 
-/* ---- the languages of the interfaces with code (.xmlc, .xmlrs...) ---- */
-
-typedef struct ide_language_t {
-	const char* extension;   /* "xmlrs" */
-	const char* name;        /* "Rust": what New project shows */
-	const char* editor;      /* the language of the script tabs */
-} ide_language_t;
-/** The language of an interface file with code, or NULL for any other file (a plain .xml included). */
-const ide_language_t* ide_interface_language(const char* path);
-const ide_language_t* ide_language_at(int index);
-int  ide_language_count(void);
 /** Sets a variable of the environment of the programs started from now on. */
 void ide_set_env(const char* name, const char* value);
 

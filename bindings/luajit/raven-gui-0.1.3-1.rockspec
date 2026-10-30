@@ -2,7 +2,7 @@
 --
 --   luarocks upload bindings/luajit/raven-gui-0.1.3-1.rockspec --api-key=<key>
 --
--- The rock installs the two modules (require("raven"), require("raven_xmllua")).
+-- The rock installs the module (require("raven")).
 -- They need LuaJIT (its FFI) and the Raven shared library: from a release of
 -- Raven, put raven.dll / libraven.so / libraven.dylib where the system finds
 -- libraries, or set RAVEN_LIBRARY to its path.
@@ -37,6 +37,5 @@ build = {
    type = "builtin",
    modules = {
       raven = "bindings/luajit/raven.lua",
-      raven_xmllua = "bindings/luajit/raven_xmllua.lua",
    },
 }

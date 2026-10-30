@@ -7,15 +7,14 @@
  *
  *   left     the folders of the project (a click shows one)
  *   right    the tiles of the folder: folders first, then the files, an
- *            icon by kind (interface, XML, code, build, translations,
+ *            icon by kind (interface, code, build, translations,
  *            pictures, text) and the extension in the corner
  *   search   the whole project, by name; each tile says where the file is
  *
  * A double click (or Enter) on a folder goes into it, on a file opens it as
  * the IDE does for any file (ide_open_file: an interface opens as code, the
- * island shows it). A right click on an interface (.xml, .xmlc, .xmlpy...)
- * offers its Preview: the visual editor. Up goes to the folder above, never
- * above the project.
+ * island shows it). A right click on an interface (.xml) offers its Preview:
+ * the visual editor. Up goes to the folder above, never above the project.
  */
 
 #include "ide.h"
@@ -29,7 +28,7 @@
 #define ICON_SIZE 96
 
 typedef enum {
-	KIND_FOLDER, KIND_INTERFACE, KIND_XML, KIND_CODE, KIND_BUILD, KIND_STRINGS, KIND_IMAGE, KIND_TEXT, KIND_COUNT
+	KIND_FOLDER, KIND_INTERFACE, KIND_CODE, KIND_BUILD, KIND_STRINGS, KIND_IMAGE, KIND_TEXT, KIND_COUNT
 } kind_t;
 
 typedef struct tile_t {
@@ -87,8 +86,7 @@ static struct {
 
 static const unsigned g_kind_colors[KIND_COUNT] = {
 	0xF5B83D, /* folder */
-	0x0A84FF, /* interface with code (.xmlc, .xmlrs...) */
-	0x30B0A0, /* XML */
+	0x0A84FF, /* interface (.xml) */
 	0x34C759, /* code */
 	0xAF52DE, /* build (CMakeLists.txt, Cargo.toml...) */
 	0xFF9F0A, /* translations (.csv) */
@@ -170,8 +168,7 @@ static Rid make_icon(kind_t kind) {
 static kind_t kind_of(const char* name, int is_dir) {
 	const char* ext = ide_extension(name);
 	if (is_dir) return KIND_FOLDER;
-	if (ide_interface_language(name)) return KIND_INTERFACE;
-	if (!strcmp(ext, "xml")) return KIND_XML;
+	if (!strcmp(ext, "xml")) return KIND_INTERFACE;
 	if (!strcmp(ext, "csv")) return KIND_STRINGS;
 	if (ide_iequal(name, "CMakeLists.txt") || ide_iequal(name, "Cargo.toml") || ide_iequal(name, "go.mod") || ide_iequal(name, "build.zig")
 		|| !strcmp(ext, "cmake") || !strcmp(ext, "csproj") || !strcmp(ext, "sln")) return KIND_BUILD;
@@ -478,7 +475,7 @@ static void on_tile_context(Rid tile_view, int index, float x, float y, void* us
 	free(g_d.menu_path);
 	g_d.menu_path = ide_strdup(tile->path);
 	g_d.menu_is_folder = tile->kind == KIND_FOLDER;
-	interface = tile->kind == KIND_INTERFACE || tile->kind == KIND_XML;
+	interface = tile->kind == KIND_INTERFACE;
 	Rwidget_set_enabled(g_d.menu_preview, interface);
 	Rwidget_set_visibility(g_d.menu_preview, g_d.menu_is_folder ? R_COLLAPSED : R_VISIBLE);
 	Rmenu_open(g_d.menu, g_ide_window, x, y);

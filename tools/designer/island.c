@@ -12,9 +12,9 @@
  * content drawer, Save all. When a build ends, the island unfolds by itself
  * for a few seconds to say how.
  *
- * When the code editor in front holds an interface (.xml, .xmlc, .xmlpy...),
- * the island is its preview: unfolded, it shows the interface built from the
- * text being typed (rebuilt as it changes, in the language of the preview),
+ * When the code editor in front holds an interface (.xml), the island is
+ * its preview: unfolded, it shows the interface built from the text being
+ * typed (rebuilt as it changes, in the language of the preview),
  * and opens it in the visual editor when asked. The visual editor itself is
  * only there when asked for (the Preview of the content drawer).
  */
@@ -127,27 +127,18 @@ static void preview_error(const char* text) {
 	Rwidget_set_visibility(find("island.preview.scroll"), text && text[0] ? R_COLLAPSED : R_VISIBLE);
 }
 
-/* Builds the interface of a text (an .xml, or the interface element of an .xmlc...) into the frame of the island. */
+/* Builds the interface of a text (an .xml) into the frame of the island. */
 static void build_preview(const char* path, const char* text) {
 	Rid frame = find("island.preview.frame"), scroll = find("island.preview.scroll"), document, root;
-	size_t start = 0, end = strlen(text);
-	int first_line = 1;
 	float width = 520.0f, height = 300.0f;
 	RXmlError error;
 	char message[400];
 
 	drop_preview();
-	if (ide_interface_language(path)) {
-		int found = xmlc_find_interface(text, &start, &end, &first_line);
-		if (found <= 0) {
-			preview_error(found == 0 ? "No interface in the file yet: write its element after the <script> blocks." : "An element of the file is not closed.");
-			return;
-		}
-	}
 	memset(&error, 0, sizeof(error));
-	document = Rxml_document_parse(text + start, end - start, &error);
+	document = Rxml_document_parse(text, strlen(text), &error);
 	if (document == R_INVALID_ID) {
-		snprintf(message, sizeof(message), "Line %d: %s", error.line + first_line - 1, error.message);
+		snprintf(message, sizeof(message), "Line %d: %s", error.line, error.message);
 		preview_error(message);
 		return;
 	}

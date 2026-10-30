@@ -69,7 +69,6 @@ says can also be said from C, and the other way round.</p>
 <li><a href="#reload">Files that are loaded again</a></li>
 <li><a href="#bycode">Tags made by code; WebView</a></li>
 <li><a href="#documents">Documents, for tools</a></li>
-<li><a href="#compiled">Compiled XML (XMLC)</a></li>
 </ol>
 
 <h2 id="loading">1. Loading a document</h2>
@@ -124,7 +123,7 @@ to <code><a href="reference.html#Rxml_set_base_path">Rxml_set_base_path</a></cod
 <tr><td>list</td><td>texts separated by <code>|</code>: <code>Items="One|Two|Three"</code></td></tr>
 <tr><td>choice</td><td>one of the words given in the tables</td></tr>
 <tr><td>file path</td><td>relative to the document</td></tr>
-<tr><td>action name</td><td>any text: <code>file.save</code> (see <a href="#actions">actions</a>); <code>{name}</code> in a compiled file (XMLC) calls a function</td></tr>
+<tr><td>action name</td><td>any text: <code>file.save</code> (see <a href="#actions">actions</a>)</td></tr>
 <tr><td>shortcut</td><td><code>Ctrl+S</code>, <code>Ctrl+Shift+Z</code>, <code>F5</code>, <code>Alt+Enter</code>. Modifiers <code>Ctrl Shift Alt Super</code>; keys: a letter, a digit, <code>F1</code>..<code>F12</code>, <code>Space Escape Enter Tab Backspace Insert Delete Left Right Up Down PageUp PageDown Home End</code></td></tr>
 </table>
 
@@ -1016,14 +1015,6 @@ for (i = 0; i &lt; n; i++) {
     <a href="reference.html#Rxml_get_attribute_info">Rxml_get_attribute_info</a>("Button", i, &amp;info);
     printf("%-20s %s\n", info.name, info.description);
 }</pre>
-
-<h2 id="compiled">17. Compiled XML (XMLC)</h2>
-
-<p>A document can be written next to its code in one file (<code>.xmlc</code> for C,
-<code>.xmlrs</code> for Rust, <code>.xmlpy</code> for Python...): <code>ravenc</code> turns the XML into tables
-of your language, built by <code><a href="reference.html#Rwindow_create_from_compiled">Rwindow_create_from_compiled</a></code>, and
-<code>OnClicked="{on_save}"</code> calls a function of the scripts. Everything on this
-page works the same compiled. See <a href="index.html#xmlc">XMLC in the guide</a>.</p>
 
 <p class="foot">Raven 0.1 &mdash; Apache License 2.0 &mdash; <a href="../index.html">raven home</a> &middot; <a href="https://github.com/oscar-soirey/Raven">source</a></p>
 </body>

@@ -1,9 +1,10 @@
 /**
  * Raven Designer - editors.c
  * Code editors in tabs: any text file of the project, the interfaces
- * (.xml, .xmlc...) included, whose preview is the island (island.c) until
- * the visual editor is asked for; and the <script> blocks of an .xmlc. Completion of the Raven API, of the
- * widgets of the interface (ui.name), of tags, attributes and @keys.
+ * (.xml) included, whose preview is the island (island.c) until the visual
+ * editor is asked for. Completion of the Raven API, of the names of the
+ * widgets of the interfaces (Rwidget_find(window, "name")), of tags,
+ * attributes and @keys.
  */
 
 #include "ide.h"
@@ -20,13 +21,11 @@
 typedef struct editor_t {
 	Rid widget;
 	char* path;      /* file shown, or NULL */
-	char* key;       /* what finds it again: the path, or "file.xmlc#script1" */
+	char* key;       /* what finds it again: the path */
 	char* title;
 	int modified;
 	/* counts the changes of its text (the island rebuilds its preview when it moves) */
 	unsigned revision;
-	ide_save_callback save;
-	void* user;
 } editor_t;
 
 static struct {
@@ -73,7 +72,6 @@ static void on_changed(Rid widget, void* user_data) {
 }
 
 static int save_editor(editor_t* e) {
-	if (e->save) return e->save(e->widget, e->user);
 	if (e->path) {
 		const char* text = Rtext_editor_get_text(e->widget);
 		if (!Rfile_write(e->path, text, strlen(text))) {
@@ -153,9 +151,9 @@ void editors_regroup(void) {
 	if (g_e.last != R_INVALID_ID && by_widget(g_e.last) && Rdock_area_is_panel_open(g_ide_dock, g_e.last)) Rdock_area_show_panel(g_ide_dock, g_e.last);
 }
 
-/* An interface (.xml, .xmlc...): XML, its scripts colored in their language, and the completion of tags and attributes. */
+/* An interface (.xml): XML, and the completion of tags and attributes. */
 static int is_interface(const char* path) {
-	return path && (ide_interface_language(path) || ide_iequal(ide_extension(path), "xml"));
+	return path && ide_iequal(ide_extension(path), "xml");
 }
 
 static editor_t* create(const char* title, const char* key, const char* path, const char* text, const char* language) {
@@ -245,8 +243,8 @@ void editors_reset_zoom(void) {
 
 /*
  * A dock area closes a panel without asking when the program does it
- * (Rdock_area_close_panel: the scripts of an .xmlc that is closed): the
- * editors whose widget is gone are forgotten here, before anyone looks.
+ * (Rdock_area_close_panel): the editors whose widget is gone are forgotten
+ * here, before anyone looks.
  */
 void editors_forget_closed(void) {
 	int i;
@@ -290,8 +288,6 @@ static const char* language_of(const char* path) {
 	const char* name = ide_basename(path);
 	const char* ext = ide_extension(path);
 	if (ide_iequal(name, "CMakeLists.txt") || ide_iequal(ext, "cmake")) return "CMake";
-	/* (an .xmlc, .xmlrs...: its scripts colored in their language, as in the XML panel) */
-	if (ide_interface_language(path)) return Rlanguage_for_file(path) ? Rlanguage_for_file(path) : "XML";
 	return Rlanguage_for_file(path);
 }
 
@@ -344,28 +340,6 @@ void editors_close_file(const char* path) {
 	remove_editor(e);
 	if (g_e.last == widget) g_e.last = R_INVALID_ID;
 	if (Rwidget_is_valid(widget)) Rdock_area_close_panel(g_ide_dock, widget);
-}
-
-Rid editors_open_virtual(const char* title, const char* key, const char* text, const char* language, ide_save_callback save, void* user_data) {
-	Rid found = editors_find(key);
-	editor_t* e;
-	if (found != R_INVALID_ID) {
-		/* opened again: what the file says now */
-		g_e.loading++;
-		Rtext_editor_set_text(found, text);
-		g_e.loading--;
-		editors_set_modified(found, R_FALSE);
-		e = by_widget(found);
-		if (e) {
-			e->save = save;
-			e->user = user_data;
-		}
-		return found;
-	}
-	e = create(title, key, NULL, text, language);
-	e->save = save;
-	e->user = user_data;
-	return e->widget;
 }
 
 int editors_save_all(void) {
@@ -434,8 +408,8 @@ void editors_clear_markers(void) {
 
 void editors_add_marker(const char* path, int line, int column, int error, const char* message) {
 	Rid widget = editors_find(path);
-	if (widget == R_INVALID_ID && xmlc_is_open() && ide_same_path(path, xmlc_path())) {
-		/* an .xmlc is whole in the XML panel */
+	if (widget == R_INVALID_ID && designer_has_document() && designer_get_path() && ide_same_path(path, designer_get_path())) {
+		/* an interface shown in the visual editor: its XML panel */
 		designer_add_marker(line, column, error, message);
 		return;
 	}
@@ -452,13 +426,12 @@ void editors_init(void) {
 	cmake.keywords = "if elseif else endif foreach endforeach while endwhile function endfunction macro endmacro return break continue";
 	cmake.types = "cmake_minimum_required project add_executable add_library target_link_libraries target_sources target_include_directories "
 		"target_compile_definitions target_compile_options set unset option find_package include add_subdirectory install message list string "
-		"file get_filename_component set_target_properties configure_file add_custom_command add_custom_target add_test enable_testing "
-		"raven_target_xmlc";
+		"file get_filename_component set_target_properties configure_file add_custom_command add_custom_target add_test enable_testing";
 	cmake.constants = "ON OFF TRUE FALSE PRIVATE PUBLIC INTERFACE REQUIRED";
 	cmake.line_comment = "#";
 	cmake.string_quotes = "\"";
 	Rlanguage_register(&cmake);
-	/* the languages of the scripts that Raven does not color by itself */
+	/* the languages of the projects that Raven does not color by itself */
 	{
 		static RLanguageDesc go, zig, lua;
 		memset(&go, 0, sizeof(go));
@@ -640,25 +613,65 @@ static void complete_keys(Rid editor) {
 	for (i = 0; i < count; i++) Rtext_editor_add_completion(editor, strings_key(i), "translation");
 }
 
+/* The Name attributes of a document, each once (copies in `names`, freed by the caller). */
+static void names_of_node(Rid node, char** names, int max, int* count) {
+	int i, n;
+	const char* name;
+	if (node == R_INVALID_ID || Rxml_node_is_comment(node)) return;
+	name = Rxml_node_get_attribute(node, "Name");
+	if (name && name[0] && *count < max) {
+		int known = 0;
+		for (i = 0; i < *count && !known; i++) known = !strcmp(names[i], name);
+		if (!known) names[(*count)++] = ide_strdup(name);
+	}
+	n = Rxml_node_get_child_count(node);
+	for (i = 0; i < n; i++) names_of_node(Rxml_node_get_child(node, i), names, max, count);
+}
+
+/* Rwidget_find(window, "..."): the names of the widgets of the interfaces open (code editors and the visual editor). */
+static void complete_names(Rid editor) {
+	char* names[256];
+	int count = 0, i;
+	const char* shown[256];
+	int shown_count = designer_get_names(shown, 256);
+	for (i = 0; i < shown_count && count < 256; i++) names[count++] = ide_strdup(shown[i]);
+	editors_forget_closed();
+	for (i = 0; i < g_e.count; i++) {
+		const char* text;
+		Rid document;
+		RXmlError error;
+		if (!is_interface(g_e.list[i].path)) continue;
+		text = Rtext_editor_get_text(g_e.list[i].widget);
+		/* (an interface being typed is often not well formed: quietly, with no error reported) */
+		document = Rxml_document_parse(text, strlen(text), &error);
+		if (document == R_INVALID_ID) continue;
+		names_of_node(Rxml_document_get_root(document), names, 256, &count);
+		Rxml_document_destroy(document);
+	}
+	for (i = 0; i < count; i++) {
+		int j, seen = 0;
+		for (j = 0; j < i && !seen; j++) seen = !strcmp(names[j], names[i]);
+		if (!seen) Rtext_editor_add_completion(editor, names[i], "widget");
+	}
+	for (i = 0; i < count; i++) free(names[i]);
+}
+
 static void complete_c(Rid editor, const char* prefix, const char* before) {
 	size_t lp = strlen(prefix), lb = strlen(before);
 	const char* word_start = before + lb - lp;
 	int i;
-	/* ui.<name>: the widgets of the interface */
-	if (word_start - before >= 3 && !strncmp(word_start - 3, "ui.", 3)) {
-		const char* names[256];
-		int count = designer_get_names(names, 256);
-		for (i = 0; i < count; i++) Rtext_editor_add_completion(editor, names[i], "Rid");
-		return;
-	}
 	/* Rtr("key"), Rtr_plural("key", ... */
 	if (word_start > before && word_start[-1] == '"' && strstr(before, "Rtr")) {
 		complete_keys(editor);
 		return;
 	}
+	/* Rwidget_find(window, "name"), widget_find, WidgetFind...: the names of the interfaces */
+	if (word_start > before && word_start[-1] == '"' && (strstr(before, "idget_find") || strstr(before, "idgetFind"))) {
+		complete_names(editor);
+		return;
+	}
 	completion_load_raven_api();
 	for (i = 0; i < g_e.api_count; i++) Rtext_editor_add_completion(editor, g_e.api[i], g_e.api_detail[i]);
-	if (xmlc_is_open()) Rtext_editor_add_completion(editor, "ui", "the widgets that have a Name");
 }
 
 static void complete_xml(Rid editor, const char* prefix, const char* before) {
@@ -681,7 +694,6 @@ static void complete_xml(Rid editor, const char* prefix, const char* before) {
 		Rtext_editor_add_completion(editor, "Item", "row");
 		Rtext_editor_add_completion(editor, "Shortcut", "keys");
 		Rtext_editor_add_completion(editor, "Strings", "translations");
-		Rtext_editor_add_completion(editor, "script", "code of the language of the file");
 		return;
 	}
 	/* inside a value: nothing to propose */
@@ -709,57 +721,10 @@ static void complete_xml(Rid editor, const char* prefix, const char* before) {
 	}
 }
 
-/* In the XML panel of an .xmlc: the cursor is between <script> and </script>. */
-static int in_script(Rid editor) {
-	const char* text = Rtext_editor_get_text(editor);
-	const char* at = text;
-	const char* open = NULL;
-	const char* p;
-	int line, column, l = 0;
-	Rtext_editor_get_cursor(editor, &line, &column);
-	while (*at && l < line) if (*at++ == '\n') l++;
-	for (p = at; *p && *p != '\n' && p - at < column; p++) {}
-	/* the last <script before the cursor, and no </script after it */
-	for (at = text; at < p; at++) {
-		if (*at != '<') continue;
-		if (!strncmp(at, "<script", 7) && (at[7] == '>' || at[7] == ' ' || at[7] == '\t' || at[7] == '\n' || at[7] == '\r')) open = at;
-		else if (!strncmp(at, "</script", 8)) open = NULL;
-	}
-	if (!open) return 0;
-	/* (past the end of the opening tag) */
-	at = strchr(open, '>');
-	return at && at < p;
-}
-
 static void on_complete(Rid editor, const char* prefix, void* user_data) {
 	char before[1024];
 	if (!before_cursor(editor, before, sizeof(before))) return;
-	/* an .xmlc is whole in the XML panel: in its scripts, the code of the language */
-	if (user_data && xmlc_is_open() && in_script(editor)) {
-		/* the words of the language of the scripts too (the panel itself is in XMLC, XMLRS...) */
-		const ide_language_t* language = ide_interface_language(xmlc_path());
-		RLanguageDesc desc;
-		if (language && Rlanguage_get(language->editor, &desc)) {
-			const char* lists[2];
-			int k;
-			lists[0] = desc.keywords;
-			lists[1] = desc.types;
-			for (k = 0; k < 2; k++) {
-				const char* w = lists[k];
-				while (w && *w) {
-					char word[64];
-					size_t n = 0;
-					while (*w == ' ') w++;
-					while (*w && *w != ' ' && n + 1 < sizeof(word)) word[n++] = *w++;
-					while (*w && *w != ' ') w++;
-					word[n] = '\0';
-					if (n && !strncmp(word, prefix, strlen(prefix))) Rtext_editor_add_completion(editor, word, k ? "type" : "keyword");
-				}
-			}
-		}
-		complete_c(editor, prefix, before);
-	}
-	else if (user_data) complete_xml(editor, prefix, before);
+	if (user_data) complete_xml(editor, prefix, before);
 	else complete_c(editor, prefix, before);
 }
 

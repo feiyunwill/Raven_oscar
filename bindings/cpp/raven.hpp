@@ -318,9 +318,6 @@ public:
 
 	static Widget create_from_xml_file(const char* path) { return Widget(Rwidget_create_from_xml_file(path)); }
 
-	/// Builds the widget tree described by a compiled table.
-	static Widget create_from_compiled(const RXmlCompiledNode* nodes, int count, const char* source) { return Widget(Rwidget_create_from_compiled(nodes, count, source)); }
-
 	/// Sets a property from text, with the names and value syntax of the
 	/// XML attributes. Handy for scripting and data-driven tools.
 	/// Returns: R_TRUE when the attribute exists for this widget and the value is valid.
@@ -1805,9 +1802,6 @@ public:
 	static Window create_from_xml(const char* xml, size_t size) { return Window(Rwindow_create_from_xml(xml, size)); }
 
 	static Window create_from_xml_file(const char* path) { return Window(Rwindow_create_from_xml_file(path)); }
-
-	/// Builds the window described by a compiled table whose root is <Window>. `source` names the file in the errors.
-	static Window create_from_compiled(const RXmlCompiledNode* nodes, int count, const char* source) { return Window(Rwindow_create_from_compiled(nodes, count, source)); }
 };
 
 class TreeItem : public Handle {

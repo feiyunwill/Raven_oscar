@@ -1202,8 +1202,7 @@ pub const RLanguageDesc = extern struct {
     flags: u32 = 0,
     /// Markup with R_LANGUAGE_EMBEDS: the language of what is between
     /// <script> and </script> (the name of a language: "C", "Rust"...).
-    /// NULL: JavaScript, as in HTML. The XMLC, XMLRS, XMLPY... languages of
-    /// Raven use it for the code of their files.
+    /// NULL: JavaScript, as in HTML.
     script_language: ?[*:0]const u8 = null,
 };
 
@@ -1313,20 +1312,6 @@ pub const RXmlAttributeInfo = extern struct {
     group: ?[*:0]const u8 = null,
     /// One line saying what it does.
     description: ?[*:0]const u8 = null,
-};
-
-pub const RXmlCompiledNode = extern struct {
-    /// Tag of the element ("VBox", "Button", "Item"...).
-    tag: ?[*:0]const u8 = null,
-    /// Its text content ("" when none).
-    text: ?[*:0]const u8 = null,
-    /// name, value, name, value... (attribute_count pairs).
-    attributes: ?[*]const ?[*:0]const u8 = null,
-    attribute_count: c_int = 0,
-    /// Index of the parent in the table, -1 for the root. The table lists a parent before its children, children in order.
-    parent: c_int = 0,
-    /// Line in the source file, for the errors.
-    line: c_int = 0,
 };
 
 /// What the system asks for.
@@ -2975,10 +2960,6 @@ pub extern fn Rwindow_create_from_xml_file(path: ?[*:0]const u8) Rid;
 /// widget. The caller owns the returned widget until it is added to a parent.
 pub extern fn Rwidget_create_from_xml(xml: ?[*:0]const u8, size: usize) Rid;
 pub extern fn Rwidget_create_from_xml_file(path: ?[*:0]const u8) Rid;
-/// Builds the window described by a compiled table whose root is <Window>. `source` names the file in the errors.
-pub extern fn Rwindow_create_from_compiled(nodes: ?*const RXmlCompiledNode, count: c_int, source: ?[*:0]const u8) Rid;
-/// Builds the widget tree described by a compiled table.
-pub extern fn Rwidget_create_from_compiled(nodes: ?*const RXmlCompiledNode, count: c_int, source: ?[*:0]const u8) Rid;
 /// Folder used to resolve relative paths found in XML (Source="...",
 /// Font="..."). The *FromXmlFile functions use the folder of the file.
 pub extern fn Rxml_set_base_path(path: ?[*:0]const u8) void;

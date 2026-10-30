@@ -2,10 +2,10 @@
 
 | Registry | Package | Install | Contents |
 |---|---|---|---|
-| PyPI | `raven-gui` | `pip install raven-gui` | `raven` + `raven_xmlpy`, with the library and `ravenc` included |
-| NuGet | `Raven.Gui` | `dotnet add package Raven.Gui` | `Raven.cs` (netstandard2.0), the library of each platform, `ravenc` and the `.xmlcs` build step |
-| crates.io | `raven-gui`, `raven-gui-build` | `raven-gui = "0.1"` | used as `raven` and `raven_build`; the library comes from a release (`RAVEN_LIB_DIR`) |
-| LuaRocks | `raven-gui` | `luarocks install raven-gui` | `raven` + `raven_xmllua`; the library comes from a release |
+| PyPI | `raven-gui` | `pip install raven-gui` | `raven`, with the library included |
+| NuGet | `Raven.Gui` | `dotnet add package Raven.Gui` | `Raven.cs` (netstandard2.0) and the library of each platform |
+| crates.io | `raven-gui` | `raven-gui = "0.1"` | used as `raven`; the library comes from a release (`RAVEN_LIB_DIR`) |
+| LuaRocks | `raven-gui` | `luarocks install raven-gui` | `raven`; the library comes from a release |
 
 The names end in `-gui` because `raven` is already taken on PyPI (the old
 Sentry client), and one name everywhere is simpler. Check that `raven-gui` /
@@ -26,7 +26,7 @@ It builds Raven (shared, Release) and writes, in `dist\bindings\`:
 ```
 pypi\       raven_gui-0.1.3-py3-none-win_amd64.whl
 nuget\      Raven.Gui.0.1.3.nupkg
-crates\     raven-gui-0.1.3.crate, raven-gui-build-0.1.3.crate
+crates\     raven-gui-0.1.3.crate
 luarocks\   raven-gui-0.1.3-1.rockspec
 ```
 
@@ -64,9 +64,8 @@ python -m twine upload pypi\*
 rem NuGet (nuget.org > API Keys)
 dotnet nuget push nuget\*.nupkg --api-key <key> --source https://api.nuget.org/v3/index.json
 
-rem crates.io (cargo login <token> once): from the folders of the crates, raven-gui-build first
-cd bindings\rust-build && cargo publish
-cd ..\rust && cargo publish
+rem crates.io (cargo login <token> once): from the folder of the crate
+cd bindings\rust && cargo publish
 
 rem LuaRocks: the rock is made from the git tag v0.1.3, so push the tag first
 luarocks upload luarocks\raven-gui-0.1.3-1.rockspec --api-key=<key>
@@ -80,7 +79,7 @@ package, publish the next version.
 - **C++**: one header (`cpp/raven.hpp`) over the C library: use it from a
   release of Raven (`find_package(raven)` then include `raven.hpp`).
 - **Go**: Go has no registry; modules are fetched from git. The module of
-  `bindings/go` is named `raven` (and `ravenc` and the designer generate
+  `bindings/go` is named `raven` (and the projects of the designer
   `import "raven/raven"`), so it is used through a `replace` directive, as
   the designer does: `replace raven => <Raven>/bindings/go`.
 - **Zig**: the package manager of Zig fetches whole repositories; use

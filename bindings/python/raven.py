@@ -1497,17 +1497,6 @@ class RXmlAttributeInfo(ctypes.Structure):
     ]
 
 
-class RXmlCompiledNode(ctypes.Structure):
-    _fields_ = [
-        ("tag", ctypes.c_char_p),
-        ("text", ctypes.c_char_p),
-        ("attributes", ctypes.POINTER(ctypes.c_char_p)),
-        ("attribute_count", ctypes.c_int),
-        ("parent", ctypes.c_int),
-        ("line", ctypes.c_int),
-    ]
-
-
 class RAccessibilitySettings(ctypes.Structure):
     """What the system asks for."""
     _fields_ = [
@@ -9310,24 +9299,6 @@ _lib.Rwidget_create_from_xml_file.restype = ctypes.c_uint32
 
 def Rwidget_create_from_xml_file(path):
     return _lib.Rwidget_create_from_xml_file(_s(path))
-
-
-_lib.Rwindow_create_from_compiled.argtypes = [ctypes.POINTER(RXmlCompiledNode), ctypes.c_int, ctypes.c_char_p]
-_lib.Rwindow_create_from_compiled.restype = ctypes.c_uint32
-
-
-def Rwindow_create_from_compiled(nodes, count, source):
-    """Builds the window described by a compiled table whose root is <Window>. `source` names the file in the errors."""
-    return _lib.Rwindow_create_from_compiled(_p(nodes), count, _s(source))
-
-
-_lib.Rwidget_create_from_compiled.argtypes = [ctypes.POINTER(RXmlCompiledNode), ctypes.c_int, ctypes.c_char_p]
-_lib.Rwidget_create_from_compiled.restype = ctypes.c_uint32
-
-
-def Rwidget_create_from_compiled(nodes, count, source):
-    """Builds the widget tree described by a compiled table."""
-    return _lib.Rwidget_create_from_compiled(_p(nodes), count, _s(source))
 
 
 _lib.Rxml_set_base_path.argtypes = [ctypes.c_char_p]

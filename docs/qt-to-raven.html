@@ -24,7 +24,7 @@
 <li><a href="#objects">Objects, ownership and errors</a></li>
 <li><a href="#layouts">Layouts</a></li>
 <li><a href="#signals">Signals and slots</a></li>
-<li><a href="#forms">.ui files and QML: XML and XMLC</a></li>
+<li><a href="#forms">.ui files and QML: XML</a></li>
 <li><a href="#styles">Style sheets and palettes: themes</a></li>
 <li><a href="#painting">QPainter: custom widgets, drawing and effects</a></li>
 <li><a href="#docking">QMainWindow and QDockWidget: DockArea</a></li>
@@ -49,7 +49,7 @@
 <p>Raven is a GUI library written in C11, with no dependency, made for editors and tools. Where Qt is a framework that brings its own object model, its own containers, its own build step and its own runtime, Raven is a single library behind a single header, <code>Raven.h</code>, that your program calls.</p>
 <ul>
 <li>Every widget, window, texture, font or timer is an opaque handle, a <code>Rid</code>. There is no class hierarchy to derive from and no meta-object compiler.</li>
-<li>Interfaces are written in XML (the equivalent of a <code>.ui</code> file or of QML) or built with the C API, or both. An <code>.xmlc</code> file holds the interface and its code together, and <code>ravenc</code> compiles it into your language.</li>
+<li>Interfaces are written in XML (the equivalent of a <code>.ui</code> file or of QML) or built with the C API, or both. The code, in C, C++ or any language with a binding, loads the XML, binds the actions it names and finds its widgets by name.</li>
 <li>Signals and slots become callbacks (one function per event of a widget) and named actions (<code>OnClicked="file.save"</code>, bound once with <code>Raction_bind</code>).</li>
 <li>The loop belongs to you: <code>while (Rwait_frame(-1.0)) {}</code> replaces <code>QApplication::exec()</code>.</li>
 <li>Rendering is Vulkan, on its own render thread. Glass materials, springs, docking, a code editor, a node graph, a timeline and effects written as shaders are part of the library.</li>
@@ -68,7 +68,7 @@
 <tr><th scope="row">Language of the library</th><td>C++ with moc</td><td>C11; bindings for C++, Rust, Python, Go, C#, Zig, LuaJIT generated from the headers</td></tr>
 <tr><th scope="row">Objects</th><td>QObject tree, parent owns children, signals</td><td>Handles (<code>Rid</code>) checked on every call; a parent widget owns its children</td></tr>
 <tr><th scope="row">Events</th><td>Event loop in <code>exec()</code>, virtual handlers, signals</td><td>Your loop draws frames; callbacks per widget; named actions</td></tr>
-<tr><th scope="row">Interfaces</th><td><code>.ui</code> (Designer), QML</td><td>XML read at run time with live reload, or XMLC compiled into your language</td></tr>
+<tr><th scope="row">Interfaces</th><td><code>.ui</code> (Designer), QML</td><td>XML read at run time, with live reload</td></tr>
 <tr><th scope="row">Styling</th><td>QStyle, palettes, style sheets (QSS)</td><td>Themes (files or code), styles per widget type and class, materials (solid, glass, blur)</td></tr>
 <tr><th scope="row">Rendering</th><td>Raster or OpenGL/RHI, on the GUI thread</td><td>Vulkan on a render thread; a job system paints large trees in parallel</td></tr>
 <tr><th scope="row">Animation</th><td>QPropertyAnimation, states</td><td>Springs everywhere; transitions (<code>Appear="Drop"</code>)</td></tr>
@@ -128,7 +128,7 @@
 <tr><td>QTranslator, tr()</td><td><code>Rlocale_load_csv</code>, <code>Rtr</code>, <code>Rtr_plural</code></td><td><code>Text="@key"</code></td></tr>
 <tr><td>QClipboard</td><td><code>Rclipboard_set_text</code>, <code>Rclipboard_get_text</code></td><td>-</td></tr>
 <tr><td>QFileSystemWatcher (for interface files)</td><td><code>Rxml_set_live_reload</code></td><td>Files loaded from disk are watched</td></tr>
-<tr><td>Qt Resource System (qrc)</td><td><code>Rwidget_create_from_xml</code> on embedded text, <code>Rtexture_create_from_file</code>, <code>Rfont_create_from_file</code></td><td>Compiled XMLC needs no file at run time</td></tr>
+<tr><td>Qt Resource System (qrc)</td><td><code>Rwidget_create_from_xml</code> on embedded text, <code>Rtexture_create_from_file</code>, <code>Rfont_create_from_file</code></td><td>XML compiled into the program as text needs no file at run time</td></tr>
 </tbody>
 </table>
 </section>
@@ -231,8 +231,8 @@ Raction_bind("file.save", on_save, NULL);</code></pre>
 </section>
 
 <section id="forms">
-<h2>8. .ui files and QML: XML and XMLC</h2>
-<p>A Raven interface is an XML document. It can be loaded from a file at run time, with live reload while you design (<code>Rwindow_create_from_xml_file</code>), or compiled with its code into your language (XMLC). The Raven IDE (<code>raven_designer</code>) edits it visually, as Qt Designer edits a <code>.ui</code> file.</p>
+<h2>8. .ui files and QML: XML</h2>
+<p>A Raven interface is an XML document. It is loaded from a file at run time, with live reload while you design (<code>Rwindow_create_from_xml_file</code>), or from text compiled into the program (<code>Rwindow_create_from_xml</code>). The Raven IDE (<code>raven_designer</code>) edits it visually, as Qt Designer edits a <code>.ui</code> file.</p>
 <h3>From a .ui file</h3>
 <table>
 <caption>Concepts of Qt Designer</caption>
@@ -242,7 +242,7 @@ Raction_bind("file.save", on_save, NULL);</code></pre>
 <tr><td>Layouts of a form</td><td>Panels: <code>VBox</code>, <code>HBox</code>, <code>Grid</code></td></tr>
 <tr><td>Spacers</td><td><code>&lt;Spacer Slot.Fill="1"/&gt;</code></td></tr>
 <tr><td>Promoted widgets</td><td>Declared tags: <code>&lt;Widget Name="Card" Title=""&gt;...&lt;/Widget&gt;</code></td></tr>
-<tr><td>Signals and slots editor</td><td><code>OnClicked</code>, <code>OnChanged</code>... naming an action, or <code>{function}</code> in XMLC</td></tr>
+<tr><td>Signals and slots editor</td><td><code>OnClicked</code>, <code>OnChanged</code>... naming an action, bound in the code with <code>Raction_bind</code></td></tr>
 <tr><td>Resources</td><td>Paths relative to the XML file; nothing to compile</td></tr>
 </tbody>
 </table>
@@ -254,33 +254,36 @@ Raction_bind("file.save", on_save, NULL);</code></pre>
 <li>Property bindings are not reactive: the code sets values when they change (<code>Rlabel_set_text</code>...). Most QML bindings in tools are a handful of labels and enabled states, which become a few lines in the callbacks.</li>
 <li>Animations: Raven animates by itself (springs for movements, transitions on appearance); custom ones use <code>Rdraw_spring</code> in a paint callback.</li>
 </ul>
-<h3>XMLC: the interface and its code in one file</h3>
-<p>An <code>.xmlc</code> file (<code>.xmlc++</code>, <code>.xmlrs</code>, <code>.xmlpy</code>, <code>.xmlgo</code>, <code>.xmlcs</code>, <code>.xmlzig</code>, <code>.xmllua</code> for the other languages) puts the code in <code>&lt;script&gt;</code> beside the XML. <code>ravenc</code> turns the whole file into a source of the language, so the compiler checks the functions named in the interface. It is the closest thing to a QML file with its JavaScript, with the code in your own language:</p>
-<pre><code>&lt;script&gt;
-#include &lt;string&gt;
-static int clicks = 0;
-static void on_hello(Rid sender, const char* action) {
-    clicks++;
-    Rlabel_set_text(ui.status, (std::to_string(clicks) + " clicks").c_str());
-}
-int main() {
-    if (!Rinit(R_BACKEND_VULKAN)) return 1;
-    main_create();
-    while (Rdraw_frame()) {}
-    Rshutdown();
-}
-&lt;/script&gt;
+<h3>The interface in XML, the code in C++</h3>
+<p>The XML names the actions and the widgets; the code binds the actions and finds the widgets by name. It is the closest thing to a QML file with its JavaScript, with the code in your own language, and the window follows the XML when it is saved while the program runs:</p>
+<pre><code>&lt;!-- main.xml --&gt;
 &lt;Window Title="Hello" Width="400" Height="200"&gt;
     &lt;VBox Spacing="12" Slot.Padding="24"&gt;
         &lt;Label Name="status" Text="Not clicked yet"/&gt;
-        &lt;Button Text="Click me" Style="Primary" OnClicked="{on_hello}"/&gt;
+        &lt;Button Text="Click me" Style="Primary" OnClicked="hello.clicked"/&gt;
     &lt;/VBox&gt;
 &lt;/Window&gt;</code></pre>
+<pre><code>// main.cpp
+#include &lt;Raven.h&gt;
+#include &lt;string&gt;
+
+static Rid window;
+static int clicks = 0;
+
+int main() {
+    if (!Rinit(R_BACKEND_VULKAN)) return 1;
+    Raction_bind("hello.clicked", [](Rid, const char*, void*) {
+        clicks++;
+        Rlabel_set_text(Rwidget_find(window, "status"), (std::to_string(clicks) + " clicks").c_str());
+    }, nullptr);
+    window = Rwindow_create_from_xml_file("main.xml");
+    while (Rdraw_frame()) {}
+    Rshutdown();
+}</code></pre>
 <pre><code># CMakeLists.txt
 find_package(raven REQUIRED)
-add_executable(hello main.xmlc++)
-target_link_libraries(hello PRIVATE raven::raven)
-raven_target_xmlc(hello)</code></pre>
+add_executable(hello main.cpp)
+target_link_libraries(hello PRIVATE raven::raven)</code></pre>
 </section>
 
 <section id="styles">
@@ -429,15 +432,14 @@ target_link_libraries(tool PRIVATE Qt6::Widgets)
 
 # Raven
 find_package(raven REQUIRED)
-add_executable(tool main.cpp main.xmlc++)
-target_link_libraries(tool PRIVATE raven::raven)
-raven_target_xmlc(tool)</code></pre>
-<p>Point CMake at the Raven package with <code>CMAKE_PREFIX_PATH</code> (the folder with <code>bin/</code>, <code>include/</code> and <code>lib/</code>). There is no moc, uic or rcc step: <code>ravenc</code> only runs for XMLC files.</p>
+add_executable(tool main.cpp)
+target_link_libraries(tool PRIVATE raven::raven)</code></pre>
+<p>Point CMake at the Raven package with <code>CMAKE_PREFIX_PATH</code> (the folder with <code>bin/</code>, <code>include/</code> and <code>lib/</code>). There is no moc, uic or rcc step: the XML is read when the program runs.</p>
 <h3>Shipping</h3>
 <ul>
 <li>Static linking puts everything in the executable; there are no plug-ins to deploy (no <code>platforms/qwindows.dll</code>, no <code>windeployqt</code>).</li>
 <li>The machine needs a Vulkan driver, which current graphics drivers include on Windows and Linux; on macOS, MoltenVK.</li>
-<li>Interfaces compiled with XMLC need no file at run time. Interfaces loaded from <code>.xml</code> files are shipped next to the program, with their images and fonts.</li>
+<li>Interfaces loaded from <code>.xml</code> files are shipped next to the program, with their images and fonts; an interface compiled into the program as text needs no file at run time.</li>
 </ul>
 </section>
 
@@ -464,7 +466,7 @@ raven_target_xmlc(tool)</code></pre>
 <ol>
 <li><strong>Separate the logic from the interface.</strong> Move what does not depend on Qt Widgets (model, file formats, algorithms) behind plain functions or classes. Replace <code>QString</code> and Qt containers there with standard types; this step is useful even before Raven.</li>
 <li><strong>Inventory the interface.</strong> List windows, dialogs, custom widgets, style sheets, docks, threads and translations. Use the tables of this guide to give each one its Raven counterpart, and mark what needs a library from <a href="#scope">section 20</a>.</li>
-<li><strong>Start with one window.</strong> Write it in XML in the Raven IDE, or in XMLC, and bind its actions to the existing logic. Keep the Qt application running beside it during the transition.</li>
+<li><strong>Start with one window.</strong> Write it in XML in the Raven IDE and bind its actions to the existing logic. Keep the Qt application running beside it during the transition.</li>
 <li><strong>Port the custom widgets.</strong> Each <code>paintEvent</code> becomes a paint callback; each event handler becomes a case of the event callback.</li>
 <li><strong>Port the styling.</strong> Choose a built-in theme close to your look, then write a theme file with your colors and the styles of your classes.</li>
 <li><strong>Port translations.</strong> Convert the <code>.ts</code> files to CSV columns and replace <code>tr()</code> with keys.</li>
@@ -484,7 +486,7 @@ raven_target_xmlc(tool)</code></pre>
 <li>Dock layouts are saved with <code>Rdock_area_save_layout</code> where <code>saveState</code> was used.</li>
 <li>Every <code>tr()</code> became a key in a CSV table.</li>
 <li>Style sheets became a theme file and classes.</li>
-<li>The build uses <code>find_package(raven)</code> and, for XMLC files, <code>raven_target_xmlc</code>.</li>
+<li>The build uses <code>find_package(raven)</code> and <code>target_link_libraries(... raven::raven)</code>.</li>
 <li>The program was tested with a screen reader and in a right-to-left language.</li>
 </ul>
 </section>

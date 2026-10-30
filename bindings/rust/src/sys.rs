@@ -1201,8 +1201,7 @@ pub struct RLanguageDesc {
     pub flags: u32,
     /// Markup with R_LANGUAGE_EMBEDS: the language of what is between
     /// <script> and </script> (the name of a language: "C", "Rust"...).
-    /// NULL: JavaScript, as in HTML. The XMLC, XMLRS, XMLPY... languages of
-    /// Raven use it for the code of their files.
+    /// NULL: JavaScript, as in HTML.
     pub script_language: *const c_char,
 }
 
@@ -1326,22 +1325,6 @@ pub struct RXmlAttributeInfo {
     pub group: *const c_char,
     /// One line saying what it does.
     pub description: *const c_char,
-}
-
-#[repr(C)]
-#[derive(Copy, Clone)]
-pub struct RXmlCompiledNode {
-    /// Tag of the element ("VBox", "Button", "Item"...).
-    pub tag: *const c_char,
-    /// Its text content ("" when none).
-    pub text: *const c_char,
-    /// name, value, name, value... (attribute_count pairs).
-    pub attributes: *const *const c_char,
-    pub attribute_count: c_int,
-    /// Index of the parent in the table, -1 for the root. The table lists a parent before its children, children in order.
-    pub parent: c_int,
-    /// Line in the source file, for the errors.
-    pub line: c_int,
 }
 
 /// What the system asks for.
@@ -2995,10 +2978,6 @@ extern "C" {
     /// widget. The caller owns the returned widget until it is added to a parent.
     pub fn Rwidget_create_from_xml(xml: *const c_char, size: usize) -> Rid;
     pub fn Rwidget_create_from_xml_file(path: *const c_char) -> Rid;
-    /// Builds the window described by a compiled table whose root is <Window>. `source` names the file in the errors.
-    pub fn Rwindow_create_from_compiled(nodes: *const RXmlCompiledNode, count: c_int, source: *const c_char) -> Rid;
-    /// Builds the widget tree described by a compiled table.
-    pub fn Rwidget_create_from_compiled(nodes: *const RXmlCompiledNode, count: c_int, source: *const c_char) -> Rid;
     /// Folder used to resolve relative paths found in XML (Source="...",
     /// Font="..."). The *FromXmlFile functions use the folder of the file.
     pub fn Rxml_set_base_path(path: *const c_char);

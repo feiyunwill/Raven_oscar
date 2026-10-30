@@ -190,7 +190,7 @@ if a cell is wrong or out of date, please
 <li><a href="#xml">9. Interfaces in XML</a>
 <ul><li><a href="#xml-reload">Live reload</a></li><li><a href="#xml-tags">Tags of your own</a></li></ul>
 </li>
-<li><a href="#xmlc">10. One file, any language: XMLC</a>
+<li><a href="#anylanguage">10. Any language: the interface in XML, the code in yours</a>
 </li>
 <li><a href="#editor">11. The text editor</a>
 <ul><li><a href="#editor-help">Proposals and markers</a></li><li><a href="#editor-zoom">Zoom</a></li><li><a href="#editor-more">Colors, fonts, Markdown</a></li></ul>
@@ -310,8 +310,9 @@ find_package(raven REQUIRED)            # -DCMAKE_PREFIX_PATH=&lt;the Raven pack
 add_executable(hello main.c)
 target_link_libraries(hello PRIVATE raven::raven)</pre>
 
-<p>Or with the interface and its code in one file, <code>main.xmlc</code>
-(see <a href="#xmlc">XMLC</a>), which the IDE creates for you.</p>
+<p>Or with the interface in its own file, <code>main.xml</code>, loaded when the
+program starts (see <a href="#anylanguage">Any language</a>): the IDE creates
+such a project for you.</p>
 
 <!-- ======================================================================= -->
 <h2 id="build">2. Building Raven</h2>
@@ -320,8 +321,7 @@ target_link_libraries(hello PRIVATE raven::raven)</pre>
 the X11 development package. The Vulkan <i>headers</i> are taken from the
 Vulkan SDK when it is installed and downloaded during the configuration
 otherwise; no Vulkan library is linked (it is loaded when the program runs).
-Each build gives the library, <code>ravenc</code> (the XMLC compiler), the IDE, the
-examples and the tests.</p>
+Each build gives the library, the IDE, the examples and the tests.</p>
 
 <h3 id="build-windows">Windows</h3>
 
@@ -407,7 +407,7 @@ add_subdirectory(Raven)                       # or the sources, without installi
 target_link_libraries(app PRIVATE raven::raven)</pre>
 
 <p>An installed package holds <code>include/</code>, <code>lib/</code> (the library and
-<code>lib/cmake/raven</code>), <code>bin/</code> (<code>ravenc</code>, <code>raven_designer</code>, and <code>raven.dll</code> in a
+<code>lib/cmake/raven</code>), <code>bin/</code> (<code>raven_designer</code>, and <code>raven.dll</code> in a
 shared build) and <code>share/raven/bindings</code>. With a shared library on Windows,
 define <code>RAVEN_USE_DLL</code> (CMake does it through the target).</p>
 
@@ -961,152 +961,115 @@ of the documents that use them, and <code>Rxml_register_tag</code> gives a tag t
 widget built by code (<a href="xml.html#bycode">Tags made by code</a>).</p>
 
 <!-- ======================================================================= -->
-<h2 id="xmlc">10. One file, any language: XMLC</h2>
+<h2 id="anylanguage">10. Any language: the interface in XML, the code in yours</h2>
 
-<p>An interface and the code that goes with it can be one file: the XML,
-and its code in <code>&lt;script&gt;</code> elements. <code>ravenc</code> turns the whole file
-into a source of your language: the scripts are copied as they are, and the
-XML becomes tables built by <code>Rwindow_create_from_compiled</code> (no XML is read
-when the program runs). <code>OnClicked="{on_save}"</code> calls the function <code>on_save</code>
-of the scripts, <code>ui.status</code> is the widget named <code>status</code>, and the compiler
-of the language checks all of it.</p>
+<p>The interface is a <code>.xml</code> file. The program, in C or in any language
+that has a binding, loads it when it starts, binds the actions it names and
+finds the widgets it needs by their name. Save the XML while the program runs
+and the window follows, the code untouched (<a href="#xml-reload">files that are
+loaded again</a>).</p>
 
-<pre>&lt;!-- main.xmlc: a whole C program --&gt;
-&lt;script&gt;
+<pre>&lt;!-- main.xml --&gt;
+&lt;Window Title="Hello" Width="400" Height="200"&gt;
+    &lt;VBox Spacing="12" Slot.Padding="24"&gt;
+        &lt;Label Name="status"&gt;Not clicked yet&lt;/Label&gt;
+        &lt;Button Text="Click me" Style="Primary" OnClicked="hello.clicked"/&gt;
+    &lt;/VBox&gt;
+&lt;/Window&gt;</pre>
+
+<pre>/* main.c */
+#include &lt;Raven.h&gt;
 #include &lt;stdio.h&gt;
 
+static Rid g_window;
 static int g_clicks = 0;
 
+/* OnClicked="hello.clicked" fires this action */
 static void on_hello(Rid sender, const char* action, void* user_data) {
     char text[64];
     (void)sender; (void)action; (void)user_data;
     snprintf(text, sizeof(text), "%d clicks", ++g_clicks);
-    Rlabel_set_text(ui.status, text);          /* the widget with Name="status" */
+    Rlabel_set_text(Rwidget_find(g_window, "status"), text);   /* the widget with Name="status" */
 }
 
 int main(void) {
     if (!Rinit(R_BACKEND_VULKAN)) return 1;
-    main_create();                             /* made by ravenc from the name of the file */
+    Raction_bind("hello.clicked", on_hello, NULL);
+    g_window = Rwindow_create_from_xml_file("main.xml");
     while (Rwait_frame(-1.0)) {}
     Rshutdown();
     return 0;
-}
-&lt;/script&gt;
-&lt;Window Title="Hello" Width="400" Height="200"&gt;
-    &lt;VBox Spacing="12" Slot.Padding="24"&gt;
-        &lt;Label Name="status"&gt;Not clicked yet&lt;/Label&gt;
-        &lt;Button Text="Click me" Style="Primary" OnClicked="{on_hello}"/&gt;
-    &lt;/VBox&gt;
-&lt;/Window&gt;</pre>
-
-<pre># CMakeLists.txt
-cmake_minimum_required(VERSION 3.16)
-project(hello C)
-find_package(raven REQUIRED)
-add_executable(hello main.xmlc)
-target_link_libraries(hello PRIVATE raven::raven)
-raven_target_xmlc(hello)                 # ravenc runs on every .xmlc / .xmlc++ of the target</pre>
+}</pre>
 
 <table>
-<tr><th>File</th><th>Language</th><th>Built by</th><th>A function <code>{f}</code></th><th>A widget</th></tr>
-<tr><td><code>.xmlc</code></td><td>C</td><td>CMake: <code>raven_target_xmlc</code></td><td><code>void f(Rid, const char*, void*)</code></td><td><code>ui.x</code></td></tr>
-<tr><td><code>.xmlc++</code>, <code>.xmlcpp</code></td><td>C++</td><td>CMake: <code>raven_target_xmlc</code></td><td>the same, <code>void f(Rid, const char*)</code>, or a lambda</td><td><code>ui.x</code></td></tr>
-<tr><td><code>.xmlrs</code></td><td>Rust</td><td>Cargo: <code>raven_build::compile</code> in <code>build.rs</code></td><td><code>fn f(Rid, &amp;str)</code></td><td><code>ui().x</code></td></tr>
-<tr><td><code>.xmlpy</code></td><td>Python</td><td><code>import raven_xmlpy</code>, then <code>import main</code>; or <code>python -m raven_xmlpy main.xmlpy</code></td><td><code>def f(sender, action)</code></td><td><code>ui.x</code></td></tr>
-<tr><td><code>.xmlgo</code></td><td>Go</td><td><code>//go:generate ravenc main.xmlgo -o main.xmlgo.go</code></td><td><code>func f(raven.ID, string)</code></td><td><code>ui.x</code></td></tr>
-<tr><td><code>.xmlcs</code></td><td>C#</td><td>MSBuild: <code>Raven.XmlCs.targets</code></td><td><code>static void F(uint, string)</code></td><td><code>MainUi.x</code></td></tr>
-<tr><td><code>.xmlzig</code></td><td>Zig</td><td><code>build.zig</code>: <code>xmlzig.compile</code></td><td><code>fn f(Rid, ?[*:0]const u8, ?*anyopaque) callconv(.C) void</code></td><td><code>ui.x</code></td></tr>
-<tr><td><code>.xmllua</code></td><td>LuaJIT</td><td><code>require("raven_xmllua")</code>, then <code>require("main")</code></td><td><code>function f(sender, action)</code> (global)</td><td><code>ui.x</code></td></tr>
+<tr><th>Language</th><th>Loads the XML</th><th>Binds an action</th><th>Finds a widget</th></tr>
+<tr><td>C, C++</td><td><code>Rwindow_create_from_xml_file("main.xml")</code></td><td><code>Raction_bind("hello.clicked", f, NULL)</code></td><td><code>Rwidget_find(window, "status")</code></td></tr>
+<tr><td>Rust</td><td><code>Rwindow_create_from_xml_file(...)</code>, <code>window_from_xml(text)</code></td><td><code>action_bind("hello.clicked", closure)</code></td><td><code>widget_find(window, "status")</code></td></tr>
+<tr><td>Python</td><td><code>r.Rwindow_create_from_xml_file("main.xml")</code></td><td><code>r.Raction_bind("hello.clicked", f)</code></td><td><code>r.Rwidget_find(window, "status")</code></td></tr>
+<tr><td>Go</td><td><code>raven.WindowCreateFromXmlFile("main.xml")</code></td><td><code>raven.ActionBind("hello.clicked", f)</code></td><td><code>raven.WidgetFind(window, "status")</code></td></tr>
+<tr><td>C#</td><td><code>R.Rwindow_create_from_xml_file("main.xml")</code></td><td><code>R.Raction_bind("hello.clicked", R.Keep&lt;RActionCallback&gt;(F), IntPtr.Zero)</code></td><td><code>R.Rwidget_find(window, "status")</code></td></tr>
+<tr><td>Zig</td><td><code>r.Rwindow_create_from_xml_file("main.xml")</code></td><td><code>r.Raction_bind("hello.clicked", f, null)</code></td><td><code>r.Rwidget_find(window, "status")</code></td></tr>
+<tr><td>LuaJIT</td><td><code>r.Rwindow_create_from_xml_file("main.xml")</code></td><td><code>r.Raction_bind("hello.clicked", ffi.cast("RActionCallback", f), nil)</code></td><td><code>r.Rwidget_find(window, "status")</code></td></tr>
 </table>
 
-<ul>
-<li>The scripts are plain code: any header, crate, package or module, and no XML escaping (<code>a &lt; b &amp;&amp; c</code> is written as it is). As many <code>&lt;script&gt;</code> as wanted.</li>
-<li>Errors point into your file: the compiler reports <code>main.xmlc:12</code>, and the IDE opens it there.</li>
-<li>Nothing is generated beside your file. In C, another file only declares <code>Rid main_create(void);</code>.</li>
-<li>Everything the XML of Raven does works the same compiled: declared tags, <code>@keys</code>, themes, slots...</li>
-<li>Plain <code>.xml</code> files are still read at run time, with live reload: use them while designing, <code>.xml...</code> to ship.</li>
-</ul>
+<p>The same program in Rust, Python and Lua, with the same <code>main.xml</code>:</p>
 
-<p>The same program in Rust, Python and Lua:</p>
-
-<pre>&lt;!-- src/main.xmlrs --&gt;
-&lt;script&gt;
+<pre>// src/main.rs
 use raven::*;
-use std::sync::atomic::{AtomicI32, Ordering};
-
-static CLICKS: AtomicI32 = AtomicI32::new(0);
-
-fn on_hello(_sender: Rid, _action: &amp;str) {
-    let n = CLICKS.fetch_add(1, Ordering::SeqCst) + 1;
-    let text = cstr(&amp;format!("{} clicks", n));
-    unsafe { Rlabel_set_text(ui().status, text.as_ptr()) };
-}
 
 fn main() {
     unsafe { Rinit(R_BACKEND_VULKAN) };
-    main_create();
+    let window = unsafe { Rwindow_create_from_xml_file(cstr("main.xml").as_ptr()) };
+    let mut clicks = 0;
+    action_bind("hello.clicked", move |_sender, _action| {
+        clicks += 1;
+        let text = cstr(&amp;format!("{} clicks", clicks));
+        unsafe { Rlabel_set_text(widget_find(window, "status"), text.as_ptr()) };
+    });
     unsafe { while Rdraw_frame() != 0 {} Rshutdown() };
-}
-&lt;/script&gt;
-&lt;Window Title="Hello" Width="400" Height="200"&gt;
-    &lt;VBox Spacing="12" Slot.Padding="24"&gt;
-        &lt;Label Name="status"&gt;Not clicked yet&lt;/Label&gt;
-        &lt;Button Text="Click me" Style="Primary" OnClicked="{on_hello}"/&gt;
-    &lt;/VBox&gt;
-&lt;/Window&gt;</pre>
-<pre>// build.rs
-fn main() { raven_build::compile("src/main.xmlrs"); }
+}</pre>
 
-// src/main.rs: the program is the .xmlrs
-include!(concat!(env!("OUT_DIR"), "/main.xmlrs.rs"));</pre>
-
-<pre>&lt;!-- main.xmlpy: python -m raven_xmlpy main.xmlpy --&gt;
-&lt;script&gt;
+<pre># main.py
 import raven as r
 
 clicks = 0
 
-def on_hello(sender, action):
+def on_hello(sender, action, user_data):
     global clicks
     clicks += 1
-    r.Rlabel_set_text(ui.status, f"{clicks} clicks")
+    r.Rlabel_set_text(r.Rwidget_find(window, "status"), f"{clicks} clicks")
 
 if __name__ == "__main__":
     r.Rinit(r.R_BACKEND_VULKAN)
-    main_create()
+    r.Raction_bind("hello.clicked", on_hello)
+    window = r.Rwindow_create_from_xml_file("main.xml")
     while r.Rwait_frame(-1.0):
         pass
-    r.Rshutdown()
-&lt;/script&gt;
-&lt;Window Title="Hello" Width="400" Height="200"&gt;
-    &lt;VBox Spacing="12" Slot.Padding="24"&gt;
-        &lt;Label Name="status"&gt;Not clicked yet&lt;/Label&gt;
-        &lt;Button Text="Click me" OnClicked="{on_hello}"/&gt;
-    &lt;/VBox&gt;
-&lt;/Window&gt;</pre>
+    r.Rshutdown()</pre>
 
-<pre>&lt;!-- main.xmllua: luajit raven_xmllua.lua main.xmllua --&gt;
-&lt;script&gt;
+<pre>-- main.lua (LuaJIT)
+local ffi = require("ffi")
 local r = require("raven")
-clicks = 0
-
-function on_hello(sender, action)
-    clicks = clicks + 1
-    r.Rlabel_set_text(ui.status, clicks .. " clicks")
-end
 
 r.Rinit(r.R_BACKEND_VULKAN)
-main_create()
+local window = r.Rwindow_create_from_xml_file("main.xml")
+local clicks = 0
+local on_hello = ffi.cast("RActionCallback", function()   -- kept: the library calls it
+    clicks = clicks + 1
+    r.Rlabel_set_text(r.Rwidget_find(window, "status"), clicks .. " clicks")
+end)
+r.Raction_bind("hello.clicked", on_hello, nil)
 while r.Rwait_frame(-1.0) ~= 0 do end
-r.Rshutdown()
-&lt;/script&gt;
-&lt;Window Title="Hello" Width="400" Height="200"&gt;
-    &lt;Label Name="status" Slot.Padding="24"&gt;Not clicked yet&lt;/Label&gt;
-&lt;/Window&gt;</pre>
+r.Rshutdown()</pre>
 
-<p><code>ravenc main.xmlc -o main.xmlc.c</code> runs the compiler by hand.
-<code>examples/languages</code> holds the same program in the eight languages, and
-<code>examples/bevy_editor</code> a whole 3D scene editor whose interface is one <code>.xmlrs</code>.</p>
+<ul>
+<li>Each project is built by the tools of its language (CMake, Cargo, <code>go build</code>, <code>dotnet</code>, <code>zig build</code>) or run by its interpreter: nothing is generated, there is no extra step.</li>
+<li>An interface that must not depend on a file at run time can be compiled into the program as text (<code>include_str!</code>, a C string, an embedded resource) and built with <code>Rwindow_create_from_xml</code>.</li>
+</ul>
+
+<p><code>examples/languages</code> holds the same program in the eight languages, as the
+IDE creates them, and <code>examples/bevy_editor</code> a whole 3D scene editor whose
+interface is one <code>editor.xml</code>, driven from Rust.</p>
 
 <!-- ======================================================================= -->
 <h2 id="editor">11. The text editor</h2>
@@ -1133,8 +1096,8 @@ const char* all = Rtext_editor_get_text(editor);
 const char* line = Rtext_editor_get_line(editor, 0);</pre>
 
 <p>Built-in languages: C, C++, C#, Java, JavaScript, TypeScript, Python, Rust,
-GLSL, JSON, CSS, XML, HTML (with the JavaScript and CSS inside it), Markdown,
-and the XMLC files. A language is a description, not code: change one or add
+GLSL, JSON, CSS, XML, HTML (with the JavaScript and CSS inside it) and
+Markdown. A language is a description, not code: change one or add
 yours with <code>Rlanguage_register</code>.</p>
 
 <pre>RLanguageDesc gd = { 0 };
@@ -1921,10 +1884,12 @@ projects.</p>
 <p><i>Project &gt; New project</i> (Ctrl+Shift+N) asks a name, a language
 (C, C++, Rust, Python, Go, C#, Zig, Lua), a location, and a <b>kind</b>:</p>
 <ul>
-<li><b>Raven interface + code</b>: the interface and its code in one
-<code>main.xml...</code> (<a href="#xmlc">XMLC</a>), the files of the tools of the
-language (<code>CMakeLists.txt</code>, <code>Cargo.toml</code> and <code>build.rs</code>, <code>go.mod</code>, <code>.csproj</code>,
-<code>build.zig</code>) and <code>strings.csv</code>. It builds as it is.</li>
+<li><b>Raven interface + code</b>: the interface in <code>main.xml</code>, the program
+that loads it (<code>main.c</code>, <code>src/main.rs</code>, <code>main.py</code>...,
+<a href="#anylanguage">any language</a>), the files of the tools of the
+language (<code>CMakeLists.txt</code>, <code>Cargo.toml</code>, <code>go.mod</code>, <code>.csproj</code>,
+<code>build.zig</code>) and <code>strings.csv</code>. It builds as it is, and the program
+runs in the folder of the project, where <code>main.xml</code> is.</li>
 <li><b>Native</b>: the language alone, a classic Hello world and what its
 tools need (<code>main.c</code> and a <code>CMakeLists.txt</code>, <code>src/main.rs</code> and a
 <code>Cargo.toml</code>, <code>main.py</code>, <code>main.go</code> and a <code>go.mod</code>, <code>Program.cs</code> and a
@@ -1937,11 +1902,12 @@ looks through the whole project.</p>
 
 <h3 id="ide-code">Code, and the island as a preview</h3>
 <p>Every file opens in a code editor tab: C, C++, Rust, Python, Go, C#, Zig,
-Lua, CMake, XML and the XMLC files, with completion of the Raven API (read
-from its headers), of the widgets of the interface (<code>ui.&lt;Name&gt;</code>), of the
-tags, attributes and <code>@keys</code>. Ctrl + wheel zooms the text of every editor at
+Lua, CMake, XML, with completion of the Raven API (read from its headers),
+of the names of the widgets of the interfaces
+(<code>Rwidget_find(window, "...")</code>), of the tags, attributes and
+<code>@keys</code>. Ctrl + wheel zooms the text of every editor at
 once, and the zoom is kept for the next time.</p>
-<p>When the file in front is an interface (<code>.xml</code>, <code>.xmlc</code>, <code>.xmlpy</code>...),
+<p>When the file in front is an interface (<code>.xml</code>),
 the <b>island</b> at the top of the window is its preview: unfolded, it shows
 the interface built from what is being typed, rebuilt as it changes, in the
 language chosen for the preview; a mistake shows its line instead.</p>
@@ -1966,16 +1932,15 @@ the file back to a code editor, and the panels of the visual editor go away.</p>
 <p>The <b>Translations</b> panel shows the CSV tables as a grid: a row per
 key, a column per language. Ctrl+B builds, F5 builds and runs, Ctrl+F5
 stops, with the tools of the language: CMake and the compiler, Cargo,
-<code>go generate</code> and <code>go build</code>, <code>dotnet</code>, <code>zig build</code>, Python, LuaJIT. What they
+<code>go build</code>, <code>dotnet</code>, <code>zig build</code>, Python, LuaJIT. What they
 write goes to <b>Output</b>; the errors and warnings of GCC, Clang, MSVC,
-rustc, Go, CMake and ravenc go to <b>Build</b> and onto the lines of the
-editors, brought back from the generated file to the line of the
-<code>.xml...</code>. <i>Project &gt; Build settings</i> sets the build type, the
+rustc, Go and CMake go to <b>Build</b> and onto the lines of the
+editors. <i>Project &gt; Build settings</i> sets the build type, the
 folder of the Raven package and the generator, kept in <code>.raven-ide</code>.</p>
 
 <h3 id="ide-scripts">Driving it from a script</h3>
 <p>The IDE can run without a window, which is how its tests work:</p>
-<pre>raven_designer --null --frames 2 --script "f 2 project /tmp/p demo C preview /tmp/p/demo/main.xmlc expectpanel panel.preview 1 do file.save_all"
+<pre>raven_designer --null --frames 2 --script "f 2 project /tmp/p demo C preview /tmp/p/demo/main.xml expectpanel panel.preview 1 do file.save_all"
 raven_designer --null --script "nativeproject /tmp/p hello Rust expectfile /tmp/p/hello/src/main.rs Hello,~world!"</pre>
 <p>The commands are listed at the top of <code>designer_script</code> in
 <code>tools/designer/main.c</code>.</p>
@@ -2018,7 +1983,6 @@ render of the last frame.</p>
 <tr><td><code>RAVEN_LIBRARY</code></td><td>bindings: the path of the shared library</td></tr>
 <tr><td><code>RAVEN_LIB_DIR</code></td><td>Rust (<code>build.rs</code>) and Zig (<code>build.zig</code>): the folder of the library</td></tr>
 <tr><td><code>RAVEN_STATIC=1</code></td><td>Rust: link the static library instead of the shared one</td></tr>
-<tr><td><code>RAVENC</code></td><td>the <code>ravenc</code> the language tools run</td></tr>
 </table>
 
 <!-- ======================================================================= -->
