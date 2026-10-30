@@ -6,7 +6,7 @@
 #   Windows (Visual C++)   raven.lib             raven.dll + raven.lib
 #   Windows (MinGW-w64)    libraven.a            raven.dll + libraven.dll.a
 #
-# Every package is a CMake install prefix (include/, lib/, bin/ with ravenc and
+# Every package is a CMake install prefix (include/, lib/, bin/ with
 # raven_designer, share/raven/): find_package(raven) with CMAKE_PREFIX_PATH set to it.
 #
 # Each run uploads the packages as artifacts (Actions tab > the run > Artifacts).
