@@ -11,3 +11,8 @@ dist-release/
 out/
 dev/
 *.patch
+
+# build outputs of the bindings (.NET, Cargo)
+bindings/**/bin/
+bindings/**/obj/
+target/
